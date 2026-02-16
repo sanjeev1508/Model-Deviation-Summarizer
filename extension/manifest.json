@@ -18,6 +18,12 @@
     ],
     "action": {
         "default_popup": "popup.html",
-        "default_title": "Analyze Conversation"
+        "default_title": "Analyze Conversation",
+        "default_icon": {
+            "128": "ICON.png"
+        }
+    },
+    "icons": {
+        "128": "ICON.png"
     }
 }
