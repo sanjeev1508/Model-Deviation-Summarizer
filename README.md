@@ -4,7 +4,7 @@
 
 ![Extension UI](https://via.placeholder.com/600x400?text=Model+Deviation+Summarizer+UI)
 
-## 🚀 Features
+## Features
 
 -   **Local-First Privacy**: Runs entirely with local models (Ollama). No data leaves your machine unless you explicitly configure an API.
 -   **Deviation Analysis**: Detects when and how an AI model drifted from your original request.
@@ -17,7 +17,7 @@
     -   Perplexity.ai
 -   **Professional UI**: Clean, dark-themed interface for distraction-free analysis.
 
-## 📋 Prerequisites
+## Prerequisites
 
 1.  **Ollama**: You must have [Ollama](https://ollama.com/) installed and running.
     -   Pull the embedding model: `ollama pull nomic-embed-text`
@@ -25,7 +25,7 @@
 2.  **Python 3.8+**: For the backend analysis engine.
 3.  **Google Chrome or Microsoft Edge**: To install the extension.
 
-## 🛠️ Installation
+## Installation
 
 ### 1. Clone the Repository
 ```bash
@@ -52,7 +52,7 @@ pip install -r requirements.txt
 3.  Click **Load unpacked**.
 4.  Select the `extension` folder inside the `app` directory.
 
-## 🏃‍♂️ Usage
+## Usage
 
 1.  **Start the Backend**:
     ```bash
@@ -69,7 +69,7 @@ pip install -r requirements.txt
     -   Click **Analyze Active Tab**.
     -   Wait for the "Comprehensive Deviation Report".
 
-## 🏗️ Project Structure
+## Project Structure
 
 ```
 app/
@@ -82,10 +82,10 @@ app/
 └── requirements.txt    # Python dependencies
 ```
 
-## 🛡️ Privacy
+## Privacy
 
 This tool allows you to use **100% Local Models**. Your chat data is extracted by the extension and sent ONLY to your local Python backend (`localhost:8000`). It is not stored or sent to any third-party cloud unless you modify the code to do so.
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
