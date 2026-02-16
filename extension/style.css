@@ -28,9 +28,7 @@ h3 {
   gap: 8px;
 }
 
-h3::before {
-  content: '✨';
-}
+
 
 textarea {
   width: 100%;
