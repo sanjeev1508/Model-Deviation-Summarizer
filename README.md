@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="ICON.png" alt="icon" width="100">
+  <img src="D:\Model Deviation Summarizer\app\ICON_GITHUB.png" alt="icon" width="100">
   <h1>Model Deviation Summarizer</h1>
 </div>
 
