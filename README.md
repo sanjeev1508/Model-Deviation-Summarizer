@@ -1,4 +1,7 @@
-# Model Deviation Summarizer
+<div align="center">
+  <img src="ICON.png" alt="icon" width="100">
+  <h1>Model Deviation Summarizer</h1>
+</div>
 
 **Model Deviation Summarizer** is an Edge extension designed to analyze conversations with AI models (ChatGPT, Gemini, Claude, Perplexity) and detect deviations from your original intent. It uses local LLMs (via Ollama) to analyze the chat transcript, identify shifts in context or tone, and reconstruct a highly optimized "Expert Prompt" to help you get back on track.
 
