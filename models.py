@@ -18,6 +18,8 @@ class ChatRequest(BaseModel):
     base_url: Optional[str] = None
     model_name: Optional[str] = None
 
+    model_config = {"protected_namespaces": ()}
+
 
 class IntegratedResponse(BaseModel):
     final_output: str
