@@ -70,7 +70,7 @@ document.getElementById('analyzeBtn').addEventListener('click', async () => {
             ...config
         };
 
-        const response = await fetch('http://127.0.0.1:8000/analyze', {
+        const response = await fetch('https://model-deviation-summarizer-3.onrender.com/analyze', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
