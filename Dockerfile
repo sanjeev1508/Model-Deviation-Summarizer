@@ -2,7 +2,12 @@
 FROM ubuntu:22.04
 
 # Install dependencies
-RUN apt update && apt install -y curl python3 python3-pip
+RUN apt update && apt install -y \
+    curl \
+    python3 \
+    python3-pip \
+    zstd \
+    ca-certificates
 
 # Install Ollama
 RUN curl -fsSL https://ollama.com/install.sh | sh
