@@ -16,6 +16,11 @@ const appwriteClient = new Appwrite.Client()
 
 const appwriteFunctions = new Appwrite.Functions(appwriteClient);
 
+// Ping Appwrite on load to verify the backend connection
+appwriteClient.ping()
+    .then(() => console.log("[Appwrite] ✅ Backend connected successfully."))
+    .catch(err => console.warn("[Appwrite] ⚠️ Ping failed:", err.message));
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Analyze Button Handler
 // ─────────────────────────────────────────────────────────────────────────────
