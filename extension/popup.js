@@ -16,10 +16,18 @@ const appwriteClient = new Appwrite.Client()
 
 const appwriteFunctions = new Appwrite.Functions(appwriteClient);
 
-// Ping Appwrite on load to verify the backend connection
-appwriteClient.ping()
-    .then(() => console.log("[Appwrite] ✅ Backend connected successfully."))
-    .catch(err => console.warn("[Appwrite] ⚠️ Ping failed:", err.message));
+// Ping Appwrite on load to verify the backend connection (non-blocking)
+document.addEventListener('DOMContentLoaded', () => {
+    try {
+        if (typeof appwriteClient.ping === 'function') {
+            appwriteClient.ping()
+                .then(() => console.log("[Appwrite] ✅ Backend connected successfully."))
+                .catch(err => console.warn("[Appwrite] ⚠️ Ping failed:", err.message));
+        }
+    } catch (e) {
+        console.warn("[Appwrite] ping() not available in this SDK build.");
+    }
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Analyze Button Handler
