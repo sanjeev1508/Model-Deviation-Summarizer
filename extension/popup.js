@@ -1,25 +1,26 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Appwrite Configuration
-// Replace these with your actual Appwrite project details.
+// ⚠️ Only replace YOUR_PROJECT_ID below — everything else is filled in.
+// Find your Project ID: Appwrite Console → Your Project → Settings → Project ID
 // ─────────────────────────────────────────────────────────────────────────────
-const APPWRITE_ENDPOINT   = "https://cloud.appwrite.io/v1";   // e.g. https://cloud.appwrite.io/v1
-const APPWRITE_PROJECT_ID = "YOUR_PROJECT_ID";                 // Appwrite project ID
-const APPWRITE_FUNCTION_ID = "YOUR_FUNCTION_ID";               // Appwrite function ID
+const APPWRITE_ENDPOINT = "https://fra.cloud.appwrite.io/v1"; // Frankfurt region
+const APPWRITE_PROJECT_ID = "YOUR_PROJECT_ID";                  // ← replace this
+const APPWRITE_FUNCTION_ID = "69a07b06000beb07e7c2";             // from your domain
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Analyze Button Handler
 // ─────────────────────────────────────────────────────────────────────────────
 document.getElementById('analyzeBtn').addEventListener('click', async () => {
-    const resultDiv  = document.getElementById('result');
-    const statusDiv  = document.getElementById('status');
+    const resultDiv = document.getElementById('result');
+    const statusDiv = document.getElementById('status');
     const statusText = document.getElementById('statusText');
     const analyzeBtn = document.getElementById('analyzeBtn');
 
     resultDiv.style.display = 'none';
-    resultDiv.textContent   = '';
-    resultDiv.className     = '';
+    resultDiv.textContent = '';
+    resultDiv.className = '';
     statusDiv.style.display = 'block';
-    analyzeBtn.disabled     = true;
+    analyzeBtn.disabled = true;
 
     statusText.textContent = "Scraping Conversation...";
 
@@ -50,7 +51,7 @@ document.getElementById('analyzeBtn').addEventListener('click', async () => {
         }
 
         // ── 3. Build payload ─────────────────────────────────────────────────
-        const config  = getConfigPayload();
+        const config = getConfigPayload();
         saveConfigToStorage();
         const payload = { ...scrapedData, ...config };
 
@@ -62,11 +63,11 @@ document.getElementById('analyzeBtn').addEventListener('click', async () => {
             {
                 method: "POST",
                 headers: {
-                    "Content-Type":     "application/json",
+                    "Content-Type": "application/json",
                     "X-Appwrite-Project": APPWRITE_PROJECT_ID,
                 },
                 body: JSON.stringify({
-                    body:  JSON.stringify(payload),
+                    body: JSON.stringify(payload),
                     async: true       // ← key: returns immediately, bypasses 30s timeout
                 })
             }
@@ -97,7 +98,7 @@ document.getElementById('analyzeBtn').addEventListener('click', async () => {
         }, 5000);
 
         let finalOutput = null;
-        const MAX_POLLS   = 60;   // 60 × 5s = 5 minutes max
+        const MAX_POLLS = 60;   // 60 × 5s = 5 minutes max
         const POLL_INTERVAL_MS = 5000;
 
         for (let i = 0; i < MAX_POLLS; i++) {
@@ -146,8 +147,8 @@ document.getElementById('analyzeBtn').addEventListener('click', async () => {
         resultDiv.style.display = 'block';
 
     } catch (error) {
-        resultDiv.textContent  = `Error: ${error.message}`;
-        resultDiv.className    = 'error';
+        resultDiv.textContent = `Error: ${error.message}`;
+        resultDiv.className = 'error';
         resultDiv.style.display = 'block';
     } finally {
         statusDiv.style.display = 'none';
@@ -160,21 +161,21 @@ document.getElementById('analyzeBtn').addEventListener('click', async () => {
 // ─────────────────────────────────────────────────────────────────────────────
 function getConfigPayload() {
     return {
-        embedding_model:    document.getElementById('embedModelLocal').value || "nomic-embed-text:latest",
+        embedding_model: document.getElementById('embedModelLocal').value || "nomic-embed-text:latest",
         embedding_provider: "local",
-        embedding_api_key:  null,
-        llm_type:           "ollama",
-        api_key:            null,
-        base_url:           "http://127.0.0.1:11434/v1",
-        model_name:         document.getElementById('llmModelLocal').value || "llama3",
-        ollama_url:         "http://127.0.0.1:11434"
+        embedding_api_key: null,
+        llm_type: "ollama",
+        api_key: null,
+        base_url: "http://127.0.0.1:11434/v1",
+        model_name: document.getElementById('llmModelLocal').value || "llama3",
+        ollama_url: "http://127.0.0.1:11434"
     };
 }
 
 function saveConfigToStorage() {
     const data = {
         embedModelLocal: document.getElementById('embedModelLocal').value,
-        llmModelLocal:   document.getElementById('llmModelLocal').value,
+        llmModelLocal: document.getElementById('llmModelLocal').value,
     };
     chrome.storage.local.set({ uiConfig: data }, () => {
         const btn = document.getElementById('saveConfigBtn');
@@ -193,7 +194,7 @@ function loadConfigFromStorage() {
         if (result.uiConfig) {
             const d = result.uiConfig;
             if (d.embedModelLocal) document.getElementById('embedModelLocal').value = d.embedModelLocal;
-            if (d.llmModelLocal)   document.getElementById('llmModelLocal').value   = d.llmModelLocal;
+            if (d.llmModelLocal) document.getElementById('llmModelLocal').value = d.llmModelLocal;
         }
     });
 }
