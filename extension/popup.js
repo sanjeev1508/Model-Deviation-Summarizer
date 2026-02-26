@@ -5,7 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 const APPWRITE_ENDPOINT = "https://fra.cloud.appwrite.io/v1";
 const APPWRITE_PROJECT_ID = "69a079db0038bb4144b3";
-const APPWRITE_FUNCTION_ID = "69a07b06000beb07e7c2";
+const APPWRITE_FUNCTION_ID = "69a07b05001e8b78a418";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Appwrite SDK setup (uses bundled appwrite.js loaded before this script)
