@@ -1,6 +1,5 @@
 import requests
 import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
 from statistics import mean
 
 from openai import OpenAI
@@ -128,7 +127,12 @@ def embed_text(text: str, config=None):
 
 
 def cosine(a, b):
-    return float(cosine_similarity(a, b)[0][0])
+    a_flat = a.flatten()
+    b_flat = b.flatten()
+    denom = np.linalg.norm(a_flat) * np.linalg.norm(b_flat)
+    if denom == 0:
+        return 0.0
+    return float(np.dot(a_flat, b_flat) / denom)
 
 
 # ==============================
