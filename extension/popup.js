@@ -1,160 +1,186 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Appwrite Configuration
+// Replace these with your actual Appwrite project details.
+// ─────────────────────────────────────────────────────────────────────────────
+const APPWRITE_ENDPOINT   = "https://cloud.appwrite.io/v1";   // e.g. https://cloud.appwrite.io/v1
+const APPWRITE_PROJECT_ID = "YOUR_PROJECT_ID";                 // Appwrite project ID
+const APPWRITE_FUNCTION_ID = "YOUR_FUNCTION_ID";               // Appwrite function ID
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Analyze Button Handler
+// ─────────────────────────────────────────────────────────────────────────────
 document.getElementById('analyzeBtn').addEventListener('click', async () => {
-    const resultDiv = document.getElementById('result');
-    const statusDiv = document.getElementById('status');
+    const resultDiv  = document.getElementById('result');
+    const statusDiv  = document.getElementById('status');
     const statusText = document.getElementById('statusText');
     const analyzeBtn = document.getElementById('analyzeBtn');
 
     resultDiv.style.display = 'none';
-    resultDiv.textContent = '';
-    resultDiv.className = '';
+    resultDiv.textContent   = '';
+    resultDiv.className     = '';
     statusDiv.style.display = 'block';
-    analyzeBtn.disabled = true;
+    analyzeBtn.disabled     = true;
 
-    // Status message cycler
-    const messages = [
-        "Analyzing Deviation...",
-        "Inferring Expectations...",
-        "Summarizing Transcript...",
-        "Reconstructing Prompt..."
-    ];
-    let msgIndex = 0;
     statusText.textContent = "Scraping Conversation...";
 
-    let intervalId = null;
-
     try {
-        // 1. Get the active tab
+        // ── 1. Get active tab ────────────────────────────────────────────────
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab) throw new Error("No active tab found.");
 
-        if (!tab) {
-            throw new Error("No active tab found.");
-        }
-
-        // 2. Execute the content script to scrape data
         const invalidSchemes = ['chrome:', 'edge:', 'about:', 'file:'];
-        if (invalidSchemes.some(scheme => tab.url.startsWith(scheme))) {
+        if (invalidSchemes.some(s => tab.url.startsWith(s))) {
             throw new Error("Cannot analyze this page type.");
         }
 
+        // ── 2. Scrape conversation ───────────────────────────────────────────
         const injectionResults = await chrome.scripting.executeScript({
             target: { tabId: tab.id },
             files: ['content_script.js']
         });
 
-        if (!injectionResults || !injectionResults[0] || !injectionResults[0].result) {
+        if (!injectionResults?.[0]?.result) {
             throw new Error("Failed to scrape conversation. Ensure you are on a supported chatbot page.");
         }
 
         const scrapedData = injectionResults[0].result;
-
-        if (scrapedData.error) {
-            throw new Error(scrapedData.error);
-        }
-
+        if (scrapedData.error) throw new Error(scrapedData.error);
         if (!scrapedData.conversation || scrapedData.conversation.length === 0) {
             throw new Error("No conversation found. Please ensure the chat is loaded.");
         }
 
-        // 3. Send to API with Streaming
-        statusText.textContent = "Connecting to Analysis Engine...";
-
-        // Collect config
-        const config = getConfigPayload();
-
-        // Save to usage for next time
+        // ── 3. Build payload ─────────────────────────────────────────────────
+        const config  = getConfigPayload();
         saveConfigToStorage();
+        const payload = { ...scrapedData, ...config };
 
-        // Merge config into scraped data
-        const payload = {
-            ...scrapedData,
-            ...config
-        };
+        // ── 4. Trigger Appwrite async execution ──────────────────────────────
+        statusText.textContent = "Sending to Analysis Engine...";
 
-        const response = await fetch('http://127.0.0.1:8000/analyze', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            throw new Error(`API Error: ${response.statusText}`);
-        }
-
-        // Process the stream
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let finalResult = "";
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split('\n');
-
-            for (const line of lines) {
-                if (!line.trim()) continue;
-                try {
-                    const data = JSON.parse(line);
-                    if (data.status) {
-                        statusText.textContent = data.status;
-                    } else if (data.final_output) {
-                        finalResult = data.final_output;
-                    } else if (data.error) {
-                        throw new Error(data.error);
-                    }
-                } catch (e) {
-                    console.error("Error parsing JSON chunk", e);
-                }
+        const triggerRes = await fetch(
+            `${APPWRITE_ENDPOINT}/functions/${APPWRITE_FUNCTION_ID}/executions`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type":     "application/json",
+                    "X-Appwrite-Project": APPWRITE_PROJECT_ID,
+                },
+                body: JSON.stringify({
+                    body:  JSON.stringify(payload),
+                    async: true       // ← key: returns immediately, bypasses 30s timeout
+                })
             }
+        );
+
+        if (!triggerRes.ok) {
+            const err = await triggerRes.json().catch(() => ({}));
+            throw new Error(`Appwrite trigger error: ${err.message || triggerRes.statusText}`);
         }
 
+        const { $id: executionId } = await triggerRes.json();
+        if (!executionId) throw new Error("No executionId returned from Appwrite.");
 
-        if (finalResult) {
-            resultDiv.textContent = finalResult;
-            resultDiv.style.display = 'block';
-        } else {
-            throw new Error("Analysis failed to produce output.");
+        // ── 5. Poll for result ───────────────────────────────────────────────
+        statusText.textContent = "Analyzing Deviations...";
+
+        const statusMessages = [
+            "Preprocessing & Embedding...",
+            "Analyzing Deviations...",
+            "Summarizing Conversation...",
+            "Extracting User Expectations...",
+            "Generating Comprehensive Analysis...",
+        ];
+        let msgIdx = 0;
+        const msgCycler = setInterval(() => {
+            msgIdx = (msgIdx + 1) % statusMessages.length;
+            statusText.textContent = statusMessages[msgIdx];
+        }, 5000);
+
+        let finalOutput = null;
+        const MAX_POLLS   = 60;   // 60 × 5s = 5 minutes max
+        const POLL_INTERVAL_MS = 5000;
+
+        for (let i = 0; i < MAX_POLLS; i++) {
+            await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+
+            const pollRes = await fetch(
+                `${APPWRITE_ENDPOINT}/functions/${APPWRITE_FUNCTION_ID}/executions/${executionId}`,
+                {
+                    headers: {
+                        "X-Appwrite-Project": APPWRITE_PROJECT_ID,
+                    }
+                }
+            );
+
+            if (!pollRes.ok) continue;   // transient error — keep polling
+
+            const execution = await pollRes.json();
+            const status = execution.status;  // "waiting" | "processing" | "completed" | "failed"
+
+            if (status === "completed") {
+                clearInterval(msgCycler);
+                try {
+                    const responseBody = JSON.parse(execution.responseBody || "{}");
+                    if (responseBody.error) throw new Error(responseBody.error);
+                    finalOutput = responseBody.final_output;
+                } catch (parseErr) {
+                    throw new Error(`Failed to parse result: ${parseErr.message}`);
+                }
+                break;
+            }
+
+            if (status === "failed") {
+                clearInterval(msgCycler);
+                const errBody = JSON.parse(execution.responseBody || "{}");
+                throw new Error(`Analysis failed: ${errBody.error || execution.errors || "Unknown error"}`);
+            }
+            // else "waiting" / "processing" → keep polling
         }
+
+        clearInterval(msgCycler);
+
+        if (!finalOutput) throw new Error("Analysis timed out. Try a shorter conversation.");
+
+        // ── 6. Display result ────────────────────────────────────────────────
+        resultDiv.textContent = finalOutput;
+        resultDiv.style.display = 'block';
 
     } catch (error) {
-        resultDiv.textContent = `Error: ${error.message}`;
-        resultDiv.className = 'error';
+        resultDiv.textContent  = `Error: ${error.message}`;
+        resultDiv.className    = 'error';
         resultDiv.style.display = 'block';
     } finally {
-        if (intervalId) clearInterval(intervalId);
         statusDiv.style.display = 'none';
         analyzeBtn.disabled = false;
     }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Config Helpers
+// ─────────────────────────────────────────────────────────────────────────────
 function getConfigPayload() {
-    // Explicitly Local Only
-    let config = {
-        embedding_model: document.getElementById('embedModelLocal').value || "nomic-embed-text:latest",
+    return {
+        embedding_model:    document.getElementById('embedModelLocal').value || "nomic-embed-text:latest",
         embedding_provider: "local",
-        embedding_api_key: null,
-        llm_type: "ollama",
-        api_key: null,
-        base_url: "http://127.0.0.1:11434/v1",
-        model_name: document.getElementById('llmModelLocal').value || "llama3",
-        ollama_url: "http://127.0.0.1:11434"
+        embedding_api_key:  null,
+        llm_type:           "ollama",
+        api_key:            null,
+        base_url:           "http://127.0.0.1:11434/v1",
+        model_name:         document.getElementById('llmModelLocal').value || "llama3",
+        ollama_url:         "http://127.0.0.1:11434"
     };
-    return config;
 }
 
 function saveConfigToStorage() {
     const data = {
         embedModelLocal: document.getElementById('embedModelLocal').value,
-        llmModelLocal: document.getElementById('llmModelLocal').value,
+        llmModelLocal:   document.getElementById('llmModelLocal').value,
     };
     chrome.storage.local.set({ uiConfig: data }, () => {
         const btn = document.getElementById('saveConfigBtn');
         const originalText = btn.textContent;
         btn.textContent = "Saved!";
-        btn.style.color = "#3b82f6"; // match accent
+        btn.style.color = "#3b82f6";
         setTimeout(() => {
             btn.textContent = originalText;
             btn.style.color = "";
@@ -165,9 +191,9 @@ function saveConfigToStorage() {
 function loadConfigFromStorage() {
     chrome.storage.local.get(['uiConfig'], (result) => {
         if (result.uiConfig) {
-            const data = result.uiConfig;
-            if (data.embedModelLocal) document.getElementById('embedModelLocal').value = data.embedModelLocal;
-            if (data.llmModelLocal) document.getElementById('llmModelLocal').value = data.llmModelLocal;
+            const d = result.uiConfig;
+            if (d.embedModelLocal) document.getElementById('embedModelLocal').value = d.embedModelLocal;
+            if (d.llmModelLocal)   document.getElementById('llmModelLocal').value   = d.llmModelLocal;
         }
     });
 }
