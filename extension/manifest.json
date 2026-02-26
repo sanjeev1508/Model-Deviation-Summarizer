@@ -10,6 +10,7 @@
     ],
     "host_permissions": [
         "http://127.0.0.1:8000/*",
+        "https://fra.cloud.appwrite.io/*",
         "https://chatgpt.com/*",
         "https://gemini.google.com/*",
         "https://www.perplexity.ai/*",
@@ -25,5 +26,15 @@
     },
     "icons": {
         "128": "ICON.png"
-    }
+    },
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "appwrite.js"
+            ],
+            "matches": [
+                "<all_urls>"
+            ]
+        }
+    ]
 }

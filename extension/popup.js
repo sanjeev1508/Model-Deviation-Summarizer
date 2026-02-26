@@ -1,11 +1,20 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Appwrite Configuration
-// ⚠️ Only replace YOUR_PROJECT_ID below — everything else is filled in.
-// Find your Project ID: Appwrite Console → Your Project → Settings → Project ID
+// ⚠️ Only APPWRITE_PROJECT_ID needs to be set — everything else is filled in.
+// Find it: Appwrite Console → Your Project → Settings → Project ID
 // ─────────────────────────────────────────────────────────────────────────────
-const APPWRITE_ENDPOINT = "https://fra.cloud.appwrite.io/v1"; // Frankfurt region
-const APPWRITE_PROJECT_ID = "YOUR_PROJECT_ID";                  // ← replace this
-const APPWRITE_FUNCTION_ID = "69a07b06000beb07e7c2";             // from your domain
+const APPWRITE_ENDPOINT = "https://fra.cloud.appwrite.io/v1";
+const APPWRITE_PROJECT_ID = "69a079db0038bb4144b3";
+const APPWRITE_FUNCTION_ID = "69a07b06000beb07e7c2";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Appwrite SDK setup (uses bundled appwrite.js loaded before this script)
+// ─────────────────────────────────────────────────────────────────────────────
+const appwriteClient = new Appwrite.Client()
+    .setEndpoint(APPWRITE_ENDPOINT)
+    .setProject(APPWRITE_PROJECT_ID);
+
+const appwriteFunctions = new Appwrite.Functions(appwriteClient);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Analyze Button Handler
@@ -24,15 +33,16 @@ document.getElementById('analyzeBtn').addEventListener('click', async () => {
 
     statusText.textContent = "Scraping Conversation...";
 
+    let msgCycler = null;
+
     try {
         // ── 1. Get active tab ────────────────────────────────────────────────
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (!tab) throw new Error("No active tab found.");
 
         const invalidSchemes = ['chrome:', 'edge:', 'about:', 'file:'];
-        if (invalidSchemes.some(s => tab.url.startsWith(s))) {
+        if (invalidSchemes.some(s => tab.url.startsWith(s)))
             throw new Error("Cannot analyze this page type.");
-        }
 
         // ── 2. Scrape conversation ───────────────────────────────────────────
         const injectionResults = await chrome.scripting.executeScript({
@@ -40,50 +50,32 @@ document.getElementById('analyzeBtn').addEventListener('click', async () => {
             files: ['content_script.js']
         });
 
-        if (!injectionResults?.[0]?.result) {
+        if (!injectionResults?.[0]?.result)
             throw new Error("Failed to scrape conversation. Ensure you are on a supported chatbot page.");
-        }
 
         const scrapedData = injectionResults[0].result;
         if (scrapedData.error) throw new Error(scrapedData.error);
-        if (!scrapedData.conversation || scrapedData.conversation.length === 0) {
+        if (!scrapedData.conversation || scrapedData.conversation.length === 0)
             throw new Error("No conversation found. Please ensure the chat is loaded.");
-        }
 
         // ── 3. Build payload ─────────────────────────────────────────────────
         const config = getConfigPayload();
         saveConfigToStorage();
         const payload = { ...scrapedData, ...config };
 
-        // ── 4. Trigger Appwrite async execution ──────────────────────────────
+        // ── 4. Trigger Appwrite async execution (SDK handles CORS) ───────────
         statusText.textContent = "Sending to Analysis Engine...";
 
-        const triggerRes = await fetch(
-            `${APPWRITE_ENDPOINT}/functions/${APPWRITE_FUNCTION_ID}/executions`,
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-Appwrite-Project": APPWRITE_PROJECT_ID,
-                },
-                body: JSON.stringify({
-                    body: JSON.stringify(payload),
-                    async: true       // ← key: returns immediately, bypasses 30s timeout
-                })
-            }
+        const execution = await appwriteFunctions.createExecution(
+            APPWRITE_FUNCTION_ID,
+            JSON.stringify(payload),  // body
+            true                      // async = true → bypasses 30s timeout
         );
 
-        if (!triggerRes.ok) {
-            const err = await triggerRes.json().catch(() => ({}));
-            throw new Error(`Appwrite trigger error: ${err.message || triggerRes.statusText}`);
-        }
-
-        const { $id: executionId } = await triggerRes.json();
+        const executionId = execution.$id;
         if (!executionId) throw new Error("No executionId returned from Appwrite.");
 
         // ── 5. Poll for result ───────────────────────────────────────────────
-        statusText.textContent = "Analyzing Deviations...";
-
         const statusMessages = [
             "Preprocessing & Embedding...",
             "Analyzing Deviations...",
@@ -92,7 +84,8 @@ document.getElementById('analyzeBtn').addEventListener('click', async () => {
             "Generating Comprehensive Analysis...",
         ];
         let msgIdx = 0;
-        const msgCycler = setInterval(() => {
+        statusText.textContent = statusMessages[0];
+        msgCycler = setInterval(() => {
             msgIdx = (msgIdx + 1) % statusMessages.length;
             statusText.textContent = statusMessages[msgIdx];
         }, 5000);
@@ -104,42 +97,32 @@ document.getElementById('analyzeBtn').addEventListener('click', async () => {
         for (let i = 0; i < MAX_POLLS; i++) {
             await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
 
-            const pollRes = await fetch(
-                `${APPWRITE_ENDPOINT}/functions/${APPWRITE_FUNCTION_ID}/executions/${executionId}`,
-                {
-                    headers: {
-                        "X-Appwrite-Project": APPWRITE_PROJECT_ID,
-                    }
-                }
-            );
+            let poll;
+            try {
+                poll = await appwriteFunctions.getExecution(APPWRITE_FUNCTION_ID, executionId);
+            } catch (_) {
+                continue; // transient error — keep polling
+            }
 
-            if (!pollRes.ok) continue;   // transient error — keep polling
-
-            const execution = await pollRes.json();
-            const status = execution.status;  // "waiting" | "processing" | "completed" | "failed"
+            const status = poll.status; // "waiting" | "processing" | "completed" | "failed"
 
             if (status === "completed") {
                 clearInterval(msgCycler);
-                try {
-                    const responseBody = JSON.parse(execution.responseBody || "{}");
-                    if (responseBody.error) throw new Error(responseBody.error);
-                    finalOutput = responseBody.final_output;
-                } catch (parseErr) {
-                    throw new Error(`Failed to parse result: ${parseErr.message}`);
-                }
+                const body = JSON.parse(poll.responseBody || "{}");
+                if (body.error) throw new Error(body.error);
+                finalOutput = body.final_output;
                 break;
             }
 
             if (status === "failed") {
                 clearInterval(msgCycler);
-                const errBody = JSON.parse(execution.responseBody || "{}");
-                throw new Error(`Analysis failed: ${errBody.error || execution.errors || "Unknown error"}`);
+                const body = JSON.parse(poll.responseBody || "{}");
+                throw new Error(`Analysis failed: ${body.error || poll.errors || "Unknown error"}`);
             }
-            // else "waiting" / "processing" → keep polling
+            // "waiting" | "processing" → keep polling
         }
 
-        clearInterval(msgCycler);
-
+        if (msgCycler) clearInterval(msgCycler);
         if (!finalOutput) throw new Error("Analysis timed out. Try a shorter conversation.");
 
         // ── 6. Display result ────────────────────────────────────────────────
@@ -147,6 +130,7 @@ document.getElementById('analyzeBtn').addEventListener('click', async () => {
         resultDiv.style.display = 'block';
 
     } catch (error) {
+        if (msgCycler) clearInterval(msgCycler);
         resultDiv.textContent = `Error: ${error.message}`;
         resultDiv.className = 'error';
         resultDiv.style.display = 'block';
