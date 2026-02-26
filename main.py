@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import traceback
+import asyncio
 
 from models import ChatRequest
 from deviation_service import analyze_conversation, evaluate_deviations
@@ -86,30 +87,33 @@ async def analyze_stream(chat: ChatRequest):
         # 1️⃣ Preprocessing
         yield json.dumps({"status": "Preprocessing & Embedding..."}) + "\n"
 
-        features = analyze_conversation(
+        features = await asyncio.to_thread(
+            analyze_conversation,
             chat.model_dump(),
-            config=runtime_config
+            runtime_config
         )
 
         yield json.dumps({"status": "Analyzing Deviations..."}) + "\n"
 
-        # 2️⃣ Build conversation text
+        # 2️⃣ Build conversation text (cheap/sync — no thread needed)
         conversation_text = build_conversation_text(chat.model_dump())
 
         # 3️⃣ Summary
         yield json.dumps({"status": "Summarizing Conversation..."}) + "\n"
-        summary_text = summarize_transcript(
+        summary_text = await asyncio.to_thread(
+            summarize_transcript,
             conversation_text,
-            config=runtime_config
+            runtime_config
         )
 
         # 4️⃣ Extract deviation insights
         yield json.dumps({"status": "Extracting User Expectations..."}) + "\n"
 
         try:
-            deviation_insights_json = evaluate_deviations(
+            deviation_insights_json = await asyncio.to_thread(
+                evaluate_deviations,
                 conversation_text,
-                config=runtime_config
+                runtime_config
             )
             deviation_insights = json.loads(deviation_insights_json)
         except Exception:
@@ -118,11 +122,12 @@ async def analyze_stream(chat: ChatRequest):
         # 5️⃣ Generate final expert output
         yield json.dumps({"status": "Generating Comprehensive Analysis..."}) + "\n"
 
-        expert_prompt = generate_expert_prompt(
+        expert_prompt = await asyncio.to_thread(
+            generate_expert_prompt,
             summary_text,
             features.get("conversation_metrics", {}),
             deviation_insights,
-            config=runtime_config
+            runtime_config
         )
 
         # 6️⃣ Final output

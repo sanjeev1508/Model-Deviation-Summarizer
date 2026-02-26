@@ -70,7 +70,7 @@ document.getElementById('analyzeBtn').addEventListener('click', async () => {
             ...config
         };
 
-        const response = await fetch('https://model-deviation-summarizer-3.onrender.com/analyze', {
+        const response = await fetch('http://127.0.0.1:8000/analyze', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -138,9 +138,9 @@ function getConfigPayload() {
         embedding_api_key: null,
         llm_type: "ollama",
         api_key: null,
-        base_url: "http://localhost:11434/v1",
+        base_url: "http://127.0.0.1:11434/v1",
         model_name: document.getElementById('llmModelLocal').value || "llama3",
-        ollama_url: "http://localhost:11434"
+        ollama_url: "http://127.0.0.1:11434"
     };
     return config;
 }
