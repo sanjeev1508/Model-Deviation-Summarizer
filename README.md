@@ -3,16 +3,17 @@
   <h1>Model Deviation Summarizer</h1>
 </div>
 
-**Model Deviation Summarizer** is an Edge extension designed to analyze conversations with AI models (ChatGPT, Gemini, Claude, Perplexity) and detect deviations from your original intent. It uses local LLMs (via Ollama) to analyze the chat transcript, identify shifts in context or tone, and reconstruct a highly optimized "Expert Prompt" to help you get back on track.
+**Model Deviation Summarizer** is an Edge extension designed to analyze conversations with AI models (ChatGPT, Gemini, Claude, Perplexity) and detect deviations from your original intent. It uses the Groq API for fast analysis and reconstruction, identifies shifts in context or tone, and generates a highly optimized "Expert Prompt" to help you get back on track.
 
 ![Extension UI](UI_Extension.png)
 
 ## Features
 
--   **Local-First Privacy**: Runs entirely with local models (Ollama). No data leaves your machine unless you explicitly configure an API.
+-   **Groq-Powered Analysis**: Uses Groq API for low-latency LLM inference.
 -   **Deviation Analysis**: Detects when and how an AI model drifted from your original request.
--   **Vector-Based Metrics**: Calculates Semantic Alignment and Expectation Alignment scores.
+-   **Vector-Based Metrics**: Calculates semantic alignment scores using sentence-transformers embeddings.
 -   **Expert Prompt Reconstruction**: Automatically generates a refined, improved prompt based on the analysis to fix the deviation in a new session.
+-   **Multilingual Support**: English, Tamil, and Hindi with automatic language detection.
 -   **Multi-Platform Support**: Works on:
     -   ChatGPT
     -   Google Gemini
@@ -22,11 +23,20 @@
 
 ## Prerequisites
 
-1.  **Ollama**: You must have [Ollama](https://ollama.com/) installed and running.
-    -   Pull the embedding model: `ollama pull nomic-embed-text`
-    -   Pull the LLM: `ollama pull llama3` (or your preferred model)
-2.  **Python 3.8+**: For the backend analysis engine.
-3.  **Google Chrome or Microsoft Edge**: To install the extension.
+1. **Python 3.9+**
+2. **Groq API Key** - free at [console.groq.com](https://console.groq.com)
+   - No Ollama or local GPU required
+3. **Google Chrome or Microsoft Edge**
+
+## Quick Start
+
+```bash
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn main:app --reload
+```
+
+Then load the `extension/` folder as an unpacked extension, choose your domain/language in the popup, and click **Analyze Active Tab**.
 
 ## Installation
 
@@ -47,7 +57,12 @@ source venv/bin/activate
 
 pip install -r requirements.txt
 ```
-*Note: Ensure `requirements.txt` includes `fastapi`, `uvicorn`, `requests`, `numpy`, `scikit-learn`, `nltk`, `openai`.*
+Configure `.env` from `.env.example` and set:
+
+```env
+GROQ_API_KEY=your_key_here
+GROQ_MODEL=llama-3.3-70b-versatile
+```
 
 ### 3. Load Extension
 1.  Open Chrome/Edge and navigate to `chrome://extensions`.
@@ -68,9 +83,21 @@ pip install -r requirements.txt
 
 3.  **Analyze**:
     -   Click the extension icon.
-    -   Configure your Local Ollama models (defaults are usually fine).
+    -   Configure domain/language only (API key + model come from backend `.env`).
+    -   Optional: click **Test Connection** to verify backend + Groq config.
     -   Click **Analyze Active Tab**.
     -   Wait for the "Comprehensive Deviation Report".
+
+## Runtime Configuration
+
+The project is now configured to use a single Groq provider path:
+
+- `GROQ_API_KEY` from backend `.env`
+- `GROQ_MODEL=llama-3.3-70b-versatile`
+- Domain options: `education`, `healthcare`, `banking`
+- Languages: auto-detect or fixed `en`, `ta`, `hi`
+
+The extension no longer sends API key or model to the backend.
 
 ## Project Structure
 
@@ -85,9 +112,23 @@ app/
 └── requirements.txt    # Python dependencies
 ```
 
+## Domain-Specific Multilingual GPT
+
+The `/chat` endpoint acts as a domain-aware GPT that supports:
+
+| Domain      | Persona                                  |
+|-------------|------------------------------------------|
+| Education   | Educational consultant & curriculum designer |
+| Healthcare  | Senior medical advisor                   |
+| Banking     | Financial advisor & compliance expert    |
+
+**Supported Languages**: English · தமிழ் (Tamil) · हिन्दी (Hindi)
+
+Language is auto-detected from user input. You can also pin a language in the extension settings.
+
 ## Privacy
 
-This tool allows you to use **100% Local Models**. Your chat data is extracted by the extension and sent ONLY to your local Python backend (`localhost:8000`). It is not stored or sent to any third-party cloud unless you modify the code to do so.
+This tool extracts chat data in your browser extension and sends it to your backend (`localhost:8000`), which then calls Groq API for model inference. Store API keys securely and avoid sharing sensitive transcripts.
 
 ## Contributing
 
