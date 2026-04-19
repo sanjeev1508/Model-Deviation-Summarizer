@@ -8,6 +8,7 @@ env/
 venv/
 .env
 
+
 # JavaScript / Node
 node_modules/
 npm-debug.log

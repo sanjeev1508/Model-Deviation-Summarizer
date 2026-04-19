@@ -3,132 +3,148 @@
   <h1>Model Deviation Summarizer</h1>
 </div>
 
-**Model Deviation Summarizer** is an Edge extension designed to analyze conversations with AI models (ChatGPT, Gemini, Claude, Perplexity) and detect deviations from your original intent. It uses the Groq API for fast analysis and reconstruction, identifies shifts in context or tone, and generates a highly optimized "Expert Prompt" to help you get back on track.
-
-![Extension UI](UI_Extension.png)
+**Model Deviation Summarizer** is a browser extension that analyzes your AI conversations (ChatGPT, Gemini, Claude, Perplexity), detects where the model drifted from your original intent, and generates a professional-grade **Master Diagnostic Report** with a corrected Expert Prompt.
 
 ## Features
 
--   **Groq-Powered Analysis**: Uses Groq API for low-latency LLM inference.
--   **Deviation Analysis**: Detects when and how an AI model drifted from your original request.
--   **Vector-Based Metrics**: Calculates semantic alignment scores using sentence-transformers embeddings.
--   **Expert Prompt Reconstruction**: Automatically generates a refined, improved prompt based on the analysis to fix the deviation in a new session.
--   **Multilingual Support**: English, Tamil, and Hindi with automatic language detection.
--   **Multi-Platform Support**: Works on:
-    -   ChatGPT
-    -   Google Gemini
-    -   Claude.ai
-    -   Perplexity.ai
--   **Professional UI**: Clean, dark-themed interface for distraction-free analysis.
+- **Master Diagnostic Report**: Structured, evidence-based analysis covering Deviation Summary, Root Cause Analysis, Drift Location, Evidence, What the Model Misunderstood, Fix Strategy, and a Reconstructed Expert Prompt.
+- **Onboarding Wizard**: A streamlined 3-step UI to configure your API keys, select your preferred model, and setup local embeddings.
+- **Bring Your Own Model (BYOM)**: Choose between state-of-the-art Groq models directly from the extension (Llama 3.3 70B, Llama 3.1 8B, Mixtral 8x7B, Gemma 2 9B).
+- **Embedded Local Analysis**: Secure, private, and offline semantic similarity scoring via Ollama embedding models (`nomic-embed-text`) or fallback `sentence-transformers`.
+- **Structured Payload Reasoning**: The LLM receives a deterministic JSON payload (metrics, drift_analysis, keyword_analysis, constraint_analysis, sentence_alignment) — drastically reducing hallucination.
+- **Multilingual Support**: English, Tamil, and Hindi, with automatic language detection.
+- **Multi-Platform**: Works transparently on ChatGPT, Google Gemini, Claude.ai, and Perplexity.ai.
+- **Domain-Aware Analysis**: Adjusts context dynamically for Education, Healthcare, Banking, Legal, and Engineering prompts.
+
+## How the Pipeline Works
+
+```
+Conversation (browser)
+       │
+       ▼
+[1] Local Embeddings (Ollama / sentence-transformers)
+    → semantic_similarity, keyword_overlap,
+      sentence_alignment[], drift_point, severity
+       │
+       ▼
+[2] Groq LLM — Structured Extraction
+    → extracted context, intent alignment,
+      constraint scores, keyword analysis
+       │
+       ▼
+[3] Assemble Master Payload (pure Python)
+    → JSON matching the MASTER_PROMPT schema
+       │
+       ▼
+[4] Groq LLM — MASTER_PROMPT
+    → Full Diagnostic Report + Reconstructed Expert Prompt
+```
+
+Only **2 LLM calls** total. All reasoning is grounded in deterministic, structued metrics calculated locally.
 
 ## Prerequisites
 
 1. **Python 3.9+**
-2. **Groq API Key** - free at [console.groq.com](https://console.groq.com)
-   - No Ollama or local GPU required
-3. **Google Chrome or Microsoft Edge**
+2. **Groq API Key** — free at [console.groq.com](https://console.groq.com)
+3. **Ollama** (Optional but Recommended) — local embeddings via `nomic-embed-text`
+4. **Google Chrome or Microsoft Edge**
 
 ## Quick Start
 
 ```bash
+git clone https://github.com/sanjeev1508/Model-Deviation-Summarizer.git
+cd Model-Deviation-Summarizer/app
+
+python -m venv venv
+venv\Scripts\activate        # Windows
+# source venv/bin/activate   # Mac/Linux
+
 pip install -r requirements.txt
-cp .env.example .env
 uvicorn main:app --reload
 ```
 
-Then load the `extension/` folder as an unpacked extension, choose your domain/language in the popup, and click **Analyze Active Tab**.
+Then load the `extension/` folder as an unpacked Chrome extension.
+
+## Setup Wizard
+
+When you open the extension for the first time, you'll be greeted by a 3-step setup Wizard:
+
+1. **Connect to Groq**: Paste your Groq API key to authenticate the backend securely.
+2. **Choose Your Model**: Select from recommended models like **Llama 3.3 70B** or **Mixtral 8x7B**.
+3. **Local Embeddings**: Install Ollama and pull `nomic-embed-text` to run latency-free, offline semantic embeddings.
 
 ## Installation
 
-### 1. Clone the Repository
-```bash
-git clone https://github.com/sanjeev1508/Model-Deviation-Summarizer.git
-cd Model-Deviation-Summarizer/app
-```
+### 1. Backend Setup
 
-### 2. Setup Backend
-Create a virtual environment and install dependencies:
 ```bash
-python -m venv venv
-# Windows
-venv\Scripts\activate
-# Mac/Linux
-source venv/bin/activate
-
 pip install -r requirements.txt
 ```
-Configure `.env` from `.env.example` and set:
+
+Optionally configure `.env` from `.env.example` if you prefer to define defaults server-side:
 
 ```env
-GROQ_API_KEY=your_key_here
-GROQ_MODEL=llama-3.3-70b-versatile
+GROQ_API_KEY=your_key_here          # optional if entered via extension UI
+GROQ_MODEL=llama-3.3-70b-versatile  # default if not chosen in UI
 ```
 
-### 3. Load Extension
-1.  Open Chrome/Edge and navigate to `chrome://extensions`.
-2.  Enable **Developer Mode** (top right).
-3.  Click **Load unpacked**.
-4.  Select the `extension` folder inside the `app` directory.
+> The UI-configured settings always take priority over the `.env` fallback.
+
+### 2. Start the Backend
+
+```bash
+uvicorn main:app --reload
+```
+
+Backend runs at `http://127.0.0.1:8000`.
+
+### 3. Load the Extension
+
+1. Open Chrome/Edge → `chrome://extensions`
+2. Enable **Developer Mode** (top right)
+3. Click **Load unpacked** → select the `extension/` folder
 
 ## Usage
 
-1.  **Start the Backend**:
-    ```bash
-    uvicorn main:app --reload
-    ```
-    The backend will run at `http://127.0.0.1:8000`.
+1. Start the backend (`uvicorn main:app --reload`)
+2. Open any supported AI chat tab (ChatGPT, Gemini, etc.) and hold a conversation
+3. Click the extension icon and run through the Onboarding Setup if you haven't.
+4. Click **Analyze Active Tab**.
+5. Wait for the extraction and streaming pipeline to generate your Master Diagnostic Report.
 
-2.  **Open a Chat**:
-    Go to ChatGPT, Gemini, or Perplexity and have a conversation.
+## Extension Settings
 
-3.  **Analyze**:
-    -   Click the extension icon.
-    -   Configure domain/language only (API key + model come from backend `.env`).
-    -   Optional: click **Test Connection** to verify backend + Groq config.
-    -   Click **Analyze Active Tab**.
-    -   Wait for the "Comprehensive Deviation Report".
+| Setting | Options | Default |
+|---|---|---|
+| Domain | Education · Healthcare · Banking · Legal · Engineering | Education |
+| Response Language | Auto-detect · English · Tamil · Hindi | Auto-detect |
 
-## Runtime Configuration
-
-The project is now configured to use a single Groq provider path:
-
-- `GROQ_API_KEY` from backend `.env`
-- `GROQ_MODEL=llama-3.3-70b-versatile`
-- Domain options: `education`, `healthcare`, `banking`
-- Languages: auto-detect or fixed `en`, `ta`, `hi`
-
-The extension no longer sends API key or model to the backend.
+Both settings can be changed at any time using the Settings Bar at the top of the extension's Main App screen.
 
 ## Project Structure
 
 ```
 app/
-├── extension/          # Browser extension source (manifest, popup, content script)
-├── main.py             # FastAPI backend entry point
-├── deviation_service.py # Core logic for embeddings & vector analysis
-├── summary_service.py   # Transcript summarization logic
-├── reconstruction_service.py # Prompt optimization logic
-├── models.py           # Pydantic data models
-└── requirements.txt    # Python dependencies
+├── extension/
+│   ├── manifest.json           # Extension manifest
+│   ├── popup.html              # Extension Wizard & UI
+│   ├── popup.js                # Extension logic, state management, UI transitions
+│   ├── content_script.js       # Conversation scraper (ChatGPT, Gemini, etc.)
+│   └── style.css               # Professional Design System & Transitions
+├── main.py                     # FastAPI backend & pipeline orchestration
+├── deviation_service.py        # Embeddings, per-turn metrics, drift detection
+├── reconstruction_service.py   # MASTER_PROMPT + generate_master_report()
+├── summary_service.py          # Language detection & LANGUAGE_NAMES
+├── embedding_service.py        # Embedding handling
+├── groq_client.py              # Groq client factory (UI key > .env fallback)
+├── models.py                   # Pydantic request/response models
+├── config.py                   # .env loader
+└── requirements.txt
 ```
-
-## Domain-Specific Multilingual GPT
-
-The `/chat` endpoint acts as a domain-aware GPT that supports:
-
-| Domain      | Persona                                  |
-|-------------|------------------------------------------|
-| Education   | Educational consultant & curriculum designer |
-| Healthcare  | Senior medical advisor                   |
-| Banking     | Financial advisor & compliance expert    |
-
-**Supported Languages**: English · தமிழ் (Tamil) · हिन्दी (Hindi)
-
-Language is auto-detected from user input. You can also pin a language in the extension settings.
 
 ## Privacy
 
-This tool extracts chat data in your browser extension and sends it to your backend (`localhost:8000`), which then calls Groq API for model inference. Store API keys securely and avoid sharing sensitive transcripts.
+Conversation text is extracted by the content script in your browser and sent to your **local** backend (`localhost:8000`), which manages embedding analysis locally, and then calls the Groq API securely. Your Groq API key is saved only in your browser's local extension storage (`chrome.storage.local`). No telemetry is collected.
 
 ## Contributing
 

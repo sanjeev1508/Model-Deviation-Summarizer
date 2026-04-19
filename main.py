@@ -4,11 +4,13 @@ from fastapi.middleware.cors import CORSMiddleware
 import json
 import traceback
 import asyncio
+from pydantic import BaseModel as PydanticBase
 
 from models import ChatRequest
-from deviation_service import analyze_conversation, evaluate_deviations
-from summary_service import build_conversation_text, summarize_transcript
-from reconstruction_service import generate_expert_prompt
+from deviation_service import analyze_conversation, extract_keyword_constraint_analysis
+from summary_service import build_conversation_text, detect_language, LANGUAGE_NAMES
+from reconstruction_service import generate_master_report, DOMAIN_PERSONAS
+from groq_client import get_groq_client, get_groq_model
 import config as app_config
 
 
@@ -40,22 +42,12 @@ def health_check():
 
 @app.get("/config")
 def get_config():
-    api_source = "Unknown"
-
-    if app_config.NVIDIA_API_KEY:
-        api_source = "NVIDIA API"
-    elif app_config.BASE_URL and "openai" in app_config.BASE_URL:
-        api_source = "OpenAI API"
-    elif app_config.BASE_URL and "deepseek" in app_config.BASE_URL:
-        api_source = "Deepseek API"
-    elif app_config.BASE_URL:
-        api_source = "Custom/Other API"
-
     return {
-        "model_name": app_config.MODEL_NAME,
-        "embed_model": app_config.EMBED_MODEL,
-        "api_source": api_source,
-        "ollama_url": app_config.OLLAMA_BASE_URL
+        "groq_model":         app_config.GROQ_MODEL,
+        "embed_model":        app_config.EMBED_MODEL,
+        "domain":             app_config.DOMAIN,
+        "supported_languages": app_config.SUPPORTED_LANGUAGES,
+        "api_source":         "Groq API",
     }
 
 # =====================================================
@@ -71,68 +63,158 @@ async def analyze(chat: ChatRequest):
 
 
 async def analyze_stream(chat: ChatRequest):
-
-    # Extract runtime config safely
-    runtime_config = {
-        "embedding_model": chat.embedding_model,
-        "embedding_provider": chat.embedding_provider,
-        "embedding_api_key": chat.embedding_api_key,
-        "llm_type": chat.llm_type,
-        "api_key": chat.api_key,
-        "base_url": chat.base_url,
-        "model_name": chat.model_name
-    }
+    runtime_config = chat.get_runtime_config()
 
     try:
-        # 1️⃣ Preprocessing
-        yield json.dumps({"status": "Preprocessing & Embedding..."}) + "\n"
+        # ── Step 1: Embedding-based alignment metrics ──────────────────────
+        yield json.dumps({"status": "Embedding & computing alignment metrics..."}) + "\n"
 
         features = await asyncio.to_thread(
             analyze_conversation,
             chat.model_dump(),
-            runtime_config
+            runtime_config,
         )
 
-        yield json.dumps({"status": "Analyzing Deviations..."}) + "\n"
+        # ── Step 2: LLM → keyword / constraint / intent extraction ─────────
+        yield json.dumps({"status": "Extracting keywords, constraints & intent..."}) + "\n"
 
-        # 2️⃣ Build conversation text (cheap/sync — no thread needed)
         conversation_text = build_conversation_text(chat.model_dump())
 
-        # 3️⃣ Summary
-        yield json.dumps({"status": "Summarizing Conversation..."}) + "\n"
-        summary_text = await asyncio.to_thread(
-            summarize_transcript,
+        kc_data = await asyncio.to_thread(
+            extract_keyword_constraint_analysis,
             conversation_text,
-            runtime_config
+            runtime_config,
         )
 
-        # 4️⃣ Extract deviation insights
-        yield json.dumps({"status": "Extracting User Expectations..."}) + "\n"
+        # ── Step 3: Build structured payload for the MASTER_PROMPT ─────────
+        yield json.dumps({"status": "Building structured deviation payload..."}) + "\n"
 
-        try:
-            deviation_insights_json = await asyncio.to_thread(
-                evaluate_deviations,
-                conversation_text,
-                runtime_config
-            )
-            deviation_insights = json.loads(deviation_insights_json)
-        except Exception:
-            deviation_insights = {}
+        metrics = features.get("conversation_metrics", {})
+        agg     = features.get("aggregate", {})
 
-        # 5️⃣ Generate final expert output
-        yield json.dumps({"status": "Generating Comprehensive Analysis..."}) + "\n"
+        master_payload = {
+            "original_query":      kc_data.get("original_query", ""),
+            "model_response":      kc_data.get("model_response", ""),
+            "metrics": {
+                "semantic_similarity": agg.get("semantic_similarity", 0.0),
+                "intent_alignment":    kc_data.get("intent_alignment", 0.0),
+                "keyword_overlap":     agg.get("keyword_overlap", 0.0),
+                "constraint_score":    kc_data.get("constraint_score", 0.0),
+            },
+            "drift_analysis":      features.get("drift_analysis", {}),
+            "keyword_analysis":    kc_data.get("keyword_analysis", {}),
+            "constraint_analysis": kc_data.get("constraint_analysis", {}),
+            "sentence_alignment":  features.get("sentence_alignment", []),
+        }
 
-        expert_prompt = await asyncio.to_thread(
-            generate_expert_prompt,
-            summary_text,
-            features.get("conversation_metrics", {}),
-            deviation_insights,
-            runtime_config
+        # ── Step 4: MASTER_PROMPT → final diagnostic report ────────────────
+        yield json.dumps({"status": "Generating Master Diagnostic Report..."}) + "\n"
+
+        final_output = await asyncio.to_thread(
+            generate_master_report,
+            master_payload,
+            runtime_config,
         )
 
-        # 6️⃣ Final output
-        yield json.dumps({"final_output": expert_prompt}) + "\n"
+        yield json.dumps({"final_output": final_output}) + "\n"
 
     except Exception as e:
         traceback.print_exc()
         yield json.dumps({"error": str(e)}) + "\n"
+
+
+# =====================================================
+# Test Groq Connection
+# =====================================================
+
+class GroqTestRequest(PydanticBase):
+    api_key: str | None = None
+
+
+@app.post("/test-groq")
+def test_groq(req: GroqTestRequest):
+    try:
+        runtime_config = {"api_key": req.api_key} if req.api_key else {}
+        client = get_groq_client(runtime_config)
+        model  = get_groq_model(runtime_config)
+        resp   = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": "Say: connection OK"}],
+            max_tokens=10,
+        )
+        return {"ok": True, "model": model, "reply": resp.choices[0].message.content}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+# =====================================================
+# Test Ollama Availability
+# =====================================================
+
+import httpx
+
+@app.get("/test-ollama")
+async def test_ollama():
+    """Check if Ollama is running and nomic-embed-text is available."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get("http://127.0.0.1:11434/api/tags")
+        if resp.status_code != 200:
+            return {"ok": False, "error": f"Ollama returned status {resp.status_code}"}
+        data   = resp.json()
+        models = [m["name"] for m in data.get("models", [])]
+        has_embed = any("nomic-embed-text" in m for m in models)
+        return {"ok": True, "models": models, "has_embed": has_embed}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+# =====================================================
+# Domain Chat (Live assistant)
+# =====================================================
+
+class DomainChatRequest(PydanticBase):
+    message:  str
+    domain:   str  = "education"
+    language: str  = "auto"
+    history:  list = []
+
+
+@app.post("/chat")
+def domain_chat(req: DomainChatRequest):
+    runtime_config = {"domain": req.domain}
+    client = get_groq_client(runtime_config)
+    model  = get_groq_model(runtime_config)
+    domain = req.domain
+
+    lang      = req.language if req.language != "auto" else detect_language(req.message)
+    lang_name = LANGUAGE_NAMES.get(lang, "English")
+
+    persona = DOMAIN_PERSONAS.get(domain, DOMAIN_PERSONAS["education"])
+    system = f"""{persona}
+
+You are a multilingual assistant. The user is communicating in {lang_name}.
+Always respond in {lang_name} unless they switch languages.
+Be accurate, empathetic, and domain-focused.
+"""
+
+    messages = [{"role": "system", "content": system}]
+    messages.extend(req.history)
+    messages.append({"role": "user", "content": req.message})
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0.5,
+            max_tokens=1024,
+        )
+        reply = response.choices[0].message.content.strip()
+        return {
+            "reply":    reply,
+            "language": lang_name,
+            "domain":   domain,
+            "model":    model,
+        }
+    except Exception as e:
+        return {"error": str(e)}

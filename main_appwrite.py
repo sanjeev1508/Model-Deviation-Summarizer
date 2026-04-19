@@ -23,26 +23,21 @@ def main(context):
 
         # ── Extract runtime config ──────────────────────────────────────
         runtime_config = {
-            "embedding_model":    body.get("embedding_model"),
-            "embedding_provider": body.get("embedding_provider"),
-            "embedding_api_key":  body.get("embedding_api_key"),
-            "llm_type":           body.get("llm_type"),
-            "api_key":            body.get("api_key"),
-            "base_url":           body.get("base_url"),
-            "model_name":         body.get("model_name"),
-            "ollama_url":         body.get("ollama_url"),
+            "embedding_model": body.get("embedding_model") or "all-MiniLM-L6-v2",
+            "domain": body.get("domain"),
+            "language": body.get("language"),
         }
 
         context.log("Step 1/4: Preprocessing & Embedding...")
-        features = analyze_conversation(body, config=runtime_config)
+        features = analyze_conversation(body, runtime_config=runtime_config)
 
         context.log("Step 2/4: Summarizing Conversation...")
         conversation_text = build_conversation_text(body)
-        summary_text = summarize_transcript(conversation_text, config=runtime_config)
+        summary_text = summarize_transcript(conversation_text, runtime_config=runtime_config)
 
         context.log("Step 3/4: Extracting User Expectations...")
         try:
-            deviation_raw = evaluate_deviations(conversation_text, config=runtime_config)
+            deviation_raw = evaluate_deviations(conversation_text, runtime_config=runtime_config)
             deviation_insights = json.loads(deviation_raw)
         except Exception as e:
             context.error(f"Deviation extraction failed (non-fatal): {e}")
@@ -53,7 +48,7 @@ def main(context):
             summary_text,
             features.get("conversation_metrics", {}),
             deviation_insights,
-            config=runtime_config
+            runtime_config=runtime_config
         )
 
         context.log("Analysis complete.")

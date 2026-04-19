@@ -1,81 +1,142 @@
+"""
+Master Prompt Reconstruction Service.
+Sends a fully structured payload to the MASTER_PROMPT for deterministic,
+evidence-based deviation reports + expert prompt reconstruction.
+"""
 import json
-import re
-from deviation_service import get_client, get_model_name
+from groq_client import get_groq_client, get_groq_model, get_domain
 
 
-def clean_llm_json(raw_output: str):
-    cleaned = re.sub(r"```json|```", "", raw_output).strip()
+# ── Domain personas (used as preamble before the master prompt) ────────────
 
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError:
-        return {
-            "expert_optimized_prompt": cleaned,
-            "improvements_made": "Model did not return valid JSON."
-        }
+DOMAIN_PERSONAS = {
+    "education": "You are an expert educational consultant and curriculum designer with deep pedagogical knowledge.",
+    "healthcare": "You are a senior medical advisor with expertise in clinical decision support and patient communication.",
+    "banking":    "You are a seasoned banking and financial advisor with expertise in personal finance and regulatory compliance.",
+}
 
+# ── Master Prompt ──────────────────────────────────────────────────────────
 
-def generate_expert_prompt(summary_text: str, metrics_json: dict, deviation_insights: dict, config=None):
-    
-    system_instruction = f"""
-Act as an expert in Conversation Analysis and Prompt Engineering.
-Task: Analyze the provided conversation and generate a comprehensive report focusing on deviation, intent, and prompt optimization.
+MASTER_PROMPT = """You are an advanced AI Conversation Debugger and Deviation Analysis Engine.
 
-Context:
-- The user is unhappy with the model's performance and wants to know *how* it deviated.
-- You have access to a summary and specific deviation metrics (0-1 score, where 1 is highly deviated).
+Your task is to analyze a conversation between a USER and an AI MODEL, detect deviations from the user's original intent, and produce a structured, evidence-based diagnostic report along with an improved expert-level prompt.
 
-Output Structure (Must follow exactly):
+You MUST NOT rely on vague explanations. You MUST reason strictly based on the provided structured metrics and text.
 
-## 1. Deviation Analysis
-- Explain **how** the model response deviated from the user's prompt.
-- Compare the User's Intent vs. the Model's Output.
-- Highlight specific areas where the model failed to meet expectations (e.g., tone, format, content depth).
+---
 
-## 2. Vector Similarity Analysis
-- Analyze the provided metrics.
-- Interpret the 'Semantic Alignment' and 'Expectation Alignment' scores.
-- Explain what these numbers mean for this specific conversation (e.g., "A low semantic score of X indicates...").
+### INPUT SCHEMA
 
-## 3. User Intent & Expectation
-- **Actual Intent**: Clearly state what the user *actually* wanted.
-- **Constraints**: explicit "Don't Deviate Into" points (what the model should avoid).
+You will receive a JSON payload with:
+- original_query       : The user's initial request
+- model_response       : The AI's first response
+- metrics              : semantic_similarity, intent_alignment, keyword_overlap, constraint_score (all 0–1)
+- drift_analysis       : drift_point (sentence index or "none"), severity ("low" | "moderate" | "high")
+- keyword_analysis     : expected_keywords, actual_keywords
+- constraint_analysis  : missing_constraints (list)
+- sentence_alignment   : per-turn cosine similarity scores (list of floats)
 
-## 4. Reconstructed Prompt (For a New Session)
-- Provide a single, comprehensive prompt that the user can copy-paste into a new chat to get the exact result they wanted.
-- Include:
-    - **Role**: Expert persona.
-    - **Task**: Clear instruction.
-    - **Context**: Background info.
-    - **Constraints**: Negative constraints to prevent previous deviation.
-    - **Output Format**: Precise requirements.
+---
 
-Rules:
-- Be critical and analytical.
-- Use the provided summary and metrics data.
-- Do NOT just summarize the conversation again; analyze the *failure* or *success* of the interaction.
+### TASK
+
+Perform a deep diagnostic analysis and generate a structured report.
+
+---
+
+### OUTPUT FORMAT (STRICT)
+
+## Deviation Summary
+Clearly state whether the model deviated from the user's intent.
+Classify severity: Aligned / Minor / Moderate / Severe.
+
+## Root Cause Analysis
+Explain WHY the deviation happened using:
+- intent mismatch
+- topic drift
+- missing constraints
+- ambiguity
+
+## Drift Location
+Identify EXACTLY where the deviation starts (sentence number or reasoning shift).
+
+## Evidence
+Use:
+- keyword mismatch
+- sentence alignment drops
+- metric values
+
+## What the Model Misunderstood
+Be precise. Do not generalize.
+
+## Fix Strategy
+Explain how the user should modify their prompt to avoid this issue.
+
+## Reconstructed Expert Prompt
+Generate a highly optimized prompt that:
+- preserves original intent
+- adds missing constraints
+- removes ambiguity
+- prevents the observed deviation
+
+The prompt MUST be:
+- clear
+- structured
+- unambiguous
+- domain-correct
+
+---
+
+### RULES
+- Do NOT hallucinate information not present in the input JSON
+- Do NOT repeat the input verbatim
+- Do NOT give generic advice
+- Always ground your reasoning in the provided metrics
+- Be concise but highly informative
+- Prioritize clarity and actionability
+
+---
+
+### GOAL
+Transform raw deviation signals into a professional-grade AI debugging report and a corrected, expert-level prompt.
+"""
+
+MULTILANG_INSTRUCTION = """
+IMPORTANT: Detect the primary language of the conversation (English / Tamil / Hindi).
+Generate the expert prompt AND the analysis in THAT SAME LANGUAGE.
+If the conversation mixes languages, use English.
 """
 
 
-    user_input = f"""
-Conversation Summary:
-{summary_text}
+# ── Main entry point ───────────────────────────────────────────────────────
 
-Deviation Metrics:
-{json.dumps(metrics_json, indent=2)}
+def generate_master_report(
+    payload: dict,
+    runtime_config: dict | None = None,
+) -> str:
+    """
+    Sends the structured payload to llama-3.3-70b-versatile using the MASTER_PROMPT.
+    payload must contain all keys defined in the MASTER_PROMPT INPUT SCHEMA.
+    """
+    domain  = get_domain(runtime_config)
+    persona = DOMAIN_PERSONAS.get(domain, DOMAIN_PERSONAS["education"])
+
+    client = get_groq_client(runtime_config)
+    model  = get_groq_model(runtime_config)
+
+    system_prompt = f"{persona}\n\n{MASTER_PROMPT}\n\n{MULTILANG_INSTRUCTION}"
+
+    user_content = f"""INPUT:
+{json.dumps(payload, indent=2, ensure_ascii=False)}
 """
-
-    client = get_client(config)
-    model = get_model_name(config)
 
     response = client.chat.completions.create(
         model=model,
         messages=[
-            {"role": "system", "content": system_instruction},
-            {"role": "user", "content": user_input}
+            {"role": "system", "content": system_prompt},
+            {"role": "user",   "content": user_content},
         ],
-        temperature=0.1
+        temperature=0.3,
+        max_tokens=2000,
     )
-
     return response.choices[0].message.content.strip()
-

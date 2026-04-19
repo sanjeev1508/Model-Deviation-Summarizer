@@ -4,14 +4,23 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ==============================
-# OLLAMA CONFIG
+# GROQ CONFIG (primary LLM)
 # ==============================
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
-EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text:latest")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_MODEL = os.getenv("GROQ_MODEL")
 
 # ==============================
-# NVIDIA / OPENAI CONFIG
+# DOMAIN CONFIG
 # ==============================
-NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
-BASE_URL = os.getenv("BASE_URL")
-MODEL_NAME = os.getenv("MODEL_NAME")
+DOMAIN = os.getenv("DOMAIN", "education")  # education | healthcare | banking
+
+# ==============================
+# LANGUAGE CONFIG
+# ==============================
+SUPPORTED_LANGUAGES = ["en", "ta", "hi"]  # English, Tamil, Hindi
+DEFAULT_LANGUAGE = os.getenv("DEFAULT_LANGUAGE", "en")
+
+# ==============================
+# EMBEDDING CONFIG (Groq-friendly local embeddings)
+# ==============================
+EMBED_MODEL = os.getenv("EMBED_MODEL", "all-MiniLM-L6-v2")
