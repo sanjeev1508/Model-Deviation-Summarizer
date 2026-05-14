@@ -3,7 +3,7 @@
   <h1>Model Deviation Summarizer</h1>
 </div>
 
-**Model Deviation Summarizer** is a browser extension that analyzes your AI conversations (ChatGPT, Gemini, Claude, Perplexity), detects where the model drifted from your original intent, and generates a professional-grade **Master Diagnostic Report** with a corrected Expert Prompt.
+**Model Deviation Summarizer** is a browser extension designed to reduce the need for constant reprompting into another AI model. It analyzes your AI conversations (ChatGPT, Gemini, Claude, Perplexity) to detect model deviation from your original intent, and refines your prompts by generating a professional-grade **Master Diagnostic Report** with a corrected Expert Prompt.
 
 ## Features
 

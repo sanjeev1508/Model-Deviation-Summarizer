@@ -20,7 +20,7 @@
   </div>
   <div class="app-header-text">
     <span class="app-title">Model Deviation Summarizer</span>
-    <span class="app-subtitle">AI-Powered Analysis</span>
+    <span class="app-subtitle">Drift report for ChatGPT, Gemini, Claude &amp; more</span>
   </div>
   <!-- Step progress dots (wizard only) -->
   <div class="step-dots" id="stepDots">
@@ -145,55 +145,21 @@
     </div>
   </div>
 
-  <!-- ── STEP 3 · Ollama Setup ─────────────────────────── -->
+  <!-- ── STEP 3 · What this extension does (accurate disclosure) ───── -->
   <div class="step" id="step3">
     <div class="step-header">
       <div class="step-num">03</div>
       <div>
-        <h2 class="step-title">Local Embeddings</h2>
-        <p class="step-desc">Run Ollama locally for offline embedding support.</p>
+        <h2 class="step-title">How analysis works</h2>
+        <p class="step-desc">Please confirm you understand what the extension sends where.</p>
       </div>
-      <a href="https://ollama.com/download" target="_blank" class="ext-link">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Install
-      </a>
     </div>
 
-    <!-- Model info -->
     <div class="ollama-card">
-      <div class="ollama-model-row">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-        <span class="ollama-model-name">nomic-embed-text</span>
-        <span class="size-pill">274 MB</span>
-        <a href="https://ollama.com/library/nomic-embed-text" target="_blank" class="hub-link">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-          Hub
-        </a>
-      </div>
-      <p class="field-hint">No internet needed during analysis once pulled.</p>
-    </div>
-
-    <!-- Install steps -->
-    <div class="install-steps">
-      <div class="install-step">
-        <span class="install-step-num">1</span>
-        <div class="install-step-body">
-          <span class="install-step-label">Install Ollama</span>
-          <a href="https://ollama.com/download" target="_blank" class="step-link">ollama.com/download</a>
-        </div>
-      </div>
-      <div class="install-step">
-        <span class="install-step-num">2</span>
-        <div class="install-step-body">
-          <span class="install-step-label">Pull the embedding model</span>
-          <div class="code-block">
-            <code id="ollamaCmd">ollama pull nomic-embed-text</code>
-            <button class="copy-btn" id="copyCmd" title="Copy">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            </button>
-          </div>
-        </div>
-      </div>
+      <p class="field-hint" style="margin:0 0 10px 0;"><strong>Supported tabs:</strong> ChatGPT, Google Gemini, Claude, Perplexity, DeepSeek (see store listing for the exact list).</p>
+      <p class="field-hint" style="margin:0 0 10px 0;">When you click <strong>Analyze Active Tab</strong>, this extension reads the visible conversation from that page and sends it to the publisher&rsquo;s online service at <strong>model-deviation-summarizer.onrender.com</strong>, which computes alignment metrics and builds a structured diagnostic report.</p>
+      <p class="field-hint" style="margin:0 0 10px 0;">Your <strong>Groq API key</strong> is stored in this browser. Each analysis also sends that key to the same online service so it can call Groq on your behalf. Groq&rsquo;s terms apply to those API calls.</p>
+      <p class="field-hint" style="margin:0;">This packaged version does <strong>not</strong> use Ollama or local embedding servers; embeddings run on the analysis service. Advanced users may self-host the open-source backend from the publisher&rsquo;s repository if they want a fully local deployment.</p>
     </div>
 
     <div class="btn-row">

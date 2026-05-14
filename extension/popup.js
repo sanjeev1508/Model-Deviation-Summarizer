@@ -94,7 +94,7 @@ document.getElementById("testAndNext1").addEventListener("click", async () => {
   btn.textContent = "Testing connection…";
 
   try {
-    const res  = await fetch("http://127.0.0.1:8000/test-groq", {
+    const res  = await fetch("https://model-deviation-summarizer.onrender.com/test-groq", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ api_key: apiKey }),
@@ -112,7 +112,7 @@ document.getElementById("testAndNext1").addEventListener("click", async () => {
     }
   } catch {
     document.getElementById("step1ConnRow").style.display = "block";
-    setBadge("step1ConnBadge", "Backend not running. Start the server first.", "error");
+    setBadge("step1ConnBadge", "Could not reach the analysis service. Check your network and try again.", "error");
   } finally {
     btn.disabled = false;
     btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -140,18 +140,8 @@ document.getElementById("nextStep2").addEventListener("click", async () => {
   goToStep(3);
 });
 
-/* ── STEP 3 · Ollama setup ──────────────────────────────────── */
+/* ── STEP 3 · Disclosure (how data is used) ─────────────────── */
 document.getElementById("backStep3").addEventListener("click", () => goToStep(2));
-
-// Copy command
-document.getElementById("copyCmd").addEventListener("click", () => {
-  const cmd = document.getElementById("ollamaCmd").textContent;
-  navigator.clipboard.writeText(cmd).then(() => {
-    const btn = document.getElementById("copyCmd");
-    btn.classList.add("copied");
-    setTimeout(() => btn.classList.remove("copied"), 2000);
-  });
-});
 
 // Finish setup → main app
 document.getElementById("finishSetup").addEventListener("click", async () => {
@@ -263,7 +253,7 @@ document.getElementById("analyzeBtn").addEventListener("click", async () => {
       model:        data[SK.groqModel] || "llama-3.3-70b-versatile",
     };
 
-    const res = await fetch("http://127.0.0.1:8000/analyze", {
+    const res = await fetch("https://model-deviation-summarizer.onrender.com/analyze", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify(payload),

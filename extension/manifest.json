@@ -1,15 +1,15 @@
 {
     "manifest_version": 3,
     "name": "Model Deviation Summarizer",
-    "version": "1.0",
-    "description": "Analyze conversation deviation and generate expert prompts.",
+    "version": "1.0.1",
+    "description": "Scrapes supported AI chat sites; sends the thread to the publisher API for drift analysis. Requires a Groq API key you provide.",
     "permissions": [
         "activeTab",
         "scripting",
         "storage"
     ],
     "host_permissions": [
-        "http://127.0.0.1:8000/*",
+        "https://model-deviation-summarizer.onrender.com/*",
         "https://chatgpt.com/*",
         "https://gemini.google.com/*",
         "https://www.perplexity.ai/*",
