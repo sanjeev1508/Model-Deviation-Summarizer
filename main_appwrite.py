@@ -1,18 +1,36 @@
+"""
+Appwrite Function entrypoint.
+
+Mirrors the FastAPI /analyze pipeline (embedding metrics → keyword/constraint
+extraction → master report) without streaming. Request body matches ChatRequest
+fields used by the extension: conversation, domain, language, api_key, model,
+embedding_model.
+
+Deploy as the Appwrite function entrypoint. Use async execution (async=true)
+from the client if you need to exceed synchronous timeouts.
+"""
 import json
-from deviation_service import analyze_conversation, evaluate_deviations
-from summary_service import build_conversation_text, summarize_transcript
-from reconstruction_service import generate_expert_prompt
+import traceback
+
+from deviation_service import analyze_conversation, extract_keyword_constraint_analysis
+from summary_service import build_conversation_text
+from reconstruction_service import generate_master_report
+from pipeline_core import build_master_payload
+
+
+def _runtime_config(body: dict) -> dict:
+    return {
+        "embedding_model":   body.get("embedding_model"),
+        "embedding_provider": body.get("embedding_provider"),
+        "domain":          body.get("domain"),
+        "language":        body.get("language"),
+        "api_key":         body.get("api_key"),
+        "model":           body.get("model"),
+    }
 
 
 def main(context):
-    """
-    Appwrite Function entrypoint.
-    Deploy this file as the function entrypoint in appwrite.json.
-    Trigger via async execution (async=true) from the extension to bypass
-    the 30-second synchronous timeout.
-    """
     try:
-        # ── Parse request body ──────────────────────────────────────────
         try:
             body = json.loads(context.req.body or "{}")
         except json.JSONDecodeError:
@@ -21,39 +39,23 @@ def main(context):
         if not body.get("conversation"):
             return context.res.json({"error": "Missing 'conversation' in request body"}, status_code=400)
 
-        # ── Extract runtime config ──────────────────────────────────────
-        runtime_config = {
-            "embedding_model": body.get("embedding_model") or "all-MiniLM-L6-v2",
-            "domain": body.get("domain"),
-            "language": body.get("language"),
-        }
+        rc = _runtime_config(body)
 
-        context.log("Step 1/4: Preprocessing & Embedding...")
-        features = analyze_conversation(body, runtime_config=runtime_config)
+        context.log("Step 1/3: Embedding & alignment metrics...")
+        features = analyze_conversation(body, runtime_config=rc)
 
-        context.log("Step 2/4: Summarizing Conversation...")
+        context.log("Step 2/3: Keyword / constraint / intent extraction (Groq)...")
         conversation_text = build_conversation_text(body)
-        summary_text = summarize_transcript(conversation_text, runtime_config=runtime_config)
+        kc_data = extract_keyword_constraint_analysis(conversation_text, runtime_config=rc)
 
-        context.log("Step 3/4: Extracting User Expectations...")
-        try:
-            deviation_raw = evaluate_deviations(conversation_text, runtime_config=runtime_config)
-            deviation_insights = json.loads(deviation_raw)
-        except Exception as e:
-            context.error(f"Deviation extraction failed (non-fatal): {e}")
-            deviation_insights = {}
-
-        context.log("Step 4/4: Generating Comprehensive Analysis...")
-        expert_prompt = generate_expert_prompt(
-            summary_text,
-            features.get("conversation_metrics", {}),
-            deviation_insights,
-            runtime_config=runtime_config
-        )
+        context.log("Step 3/3: Master diagnostic report (Groq)...")
+        master_payload = build_master_payload(features, kc_data)
+        final_output = generate_master_report(master_payload, runtime_config=rc)
 
         context.log("Analysis complete.")
-        return context.res.json({"final_output": expert_prompt})
+        return context.res.json({"final_output": final_output})
 
     except Exception as e:
+        traceback.print_exc()
         context.error(f"Fatal error: {e}")
         return context.res.json({"error": str(e)}, status_code=500)
