@@ -158,7 +158,7 @@
     <div class="ollama-card">
       <p class="field-hint" style="margin:0 0 10px 0;"><strong>Supported tabs:</strong> ChatGPT, Google Gemini, Claude, Perplexity, DeepSeek (see store listing for the exact list).</p>
       <p class="field-hint" style="margin:0 0 10px 0;">When you click <strong>Analyze Active Tab</strong>, this extension reads the visible conversation from that page and sends it to the publisher&rsquo;s online service at <strong>model-deviation-summarizer.onrender.com</strong>, which computes alignment metrics and builds a structured diagnostic report.</p>
-      <p class="field-hint" style="margin:0 0 10px 0;">Your <strong>Groq API key</strong> is stored in this browser. Each analysis also sends that key to the same online service so it can call Groq on your behalf. Groq&rsquo;s terms apply to those API calls.</p>
+      <p class="field-hint" style="margin:0 0 10px 0;">Your <strong>Groq API key</strong> is stored in this browser. Each analysis sends it in the <strong>Authorization</strong> header (not in the JSON body) to the same online service so it can call Groq embeddings and chat on your behalf. Groq&rsquo;s terms apply to those API calls.</p>
       <p class="field-hint" style="margin:0;">This packaged version does <strong>not</strong> use Ollama or local embedding servers; embeddings run on the analysis service. Advanced users may self-host the open-source backend from the publisher&rsquo;s repository if they want a fully local deployment.</p>
     </div>
 

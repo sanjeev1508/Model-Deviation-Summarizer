@@ -96,8 +96,11 @@ document.getElementById("testAndNext1").addEventListener("click", async () => {
   try {
     const res  = await fetch("https://model-deviation-summarizer.onrender.com/test-groq", {
       method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ api_key: apiKey }),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body:    JSON.stringify({}),
     });
     const data = await res.json();
 
@@ -244,19 +247,19 @@ document.getElementById("analyzeBtn").addEventListener("click", async () => {
 
     statusText.textContent = "Sending to analysis backend…";
 
-    const payload = {
-      conversation: scraped.conversation,
-      domain:       data[SK.domain]    || "education",
-      language:     data[SK.language]  || "auto",
-      llm_type:     "groq",
-      api_key:      apiKey,
-      model:        data[SK.groqModel] || "llama-3.3-70b-versatile",
-    };
-
     const res = await fetch("https://model-deviation-summarizer.onrender.com/analyze", {
       method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify(payload),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body:    JSON.stringify({
+        conversation: scraped.conversation,
+        domain:       data[SK.domain]    || "education",
+        language:     data[SK.language]  || "auto",
+        llm_type:     "groq",
+        model:        data[SK.groqModel] || "llama-3.3-70b-versatile",
+      }),
     });
     if (!res.ok) throw new Error(`Backend error: ${res.status}`);
 
