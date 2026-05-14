@@ -55,6 +55,7 @@ def get_config():
         "embedding_provider": app_config.EMBEDDING_PROVIDER,
         "groq_embed_model":   app_config.GROQ_EMBED_MODEL,
         "embed_model_local":  app_config.EMBED_MODEL,
+        "groq_embed_fallback_local": app_config.EMBEDDING_GROQ_FALLBACK_LOCAL,
         "domain":              app_config.DOMAIN,
         "supported_languages": app_config.SUPPORTED_LANGUAGES,
         "api_source":          "Groq API",

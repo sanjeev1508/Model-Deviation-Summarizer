@@ -32,3 +32,10 @@ if _raw_embed in ("nomic-embed-text-v1_5", "nomic-embed-text-v1-5"):
     _raw_embed = "nomic-embed-text-v1.5"
 GROQ_EMBED_MODEL = _raw_embed
 EMBED_MODEL = os.getenv("EMBED_MODEL", "all-MiniLM-L6-v2")
+# If True, Groq embedding failures (e.g. model_not_found for all Nomic ids) fall back to local ST when installed.
+EMBEDDING_GROQ_FALLBACK_LOCAL = os.getenv("EMBEDDING_GROQ_FALLBACK_LOCAL", "true").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)

@@ -4,9 +4,9 @@ Embeddings: Groq OpenAI-compatible HTTP API by default (no PyTorch on server).
 Optional local path: EMBEDDING_PROVIDER=local + sentence-transformers
 (see requirements-local-embed.txt).
 
-Canonical Groq embedding id in official Python examples: ``nomic-embed-text-v1.5``
-(dot). If Groq returns model_not_found for one spelling, we retry the other
-(``nomic-embed-text-v1_5``) once.
+If Groq returns model_not_found for all Nomic embedding ids (some keys/regions
+have no embedding access), optional fallback uses local SentenceTransformers
+when installed (EMBEDDING_GROQ_FALLBACK_LOCAL=true, default).
 """
 from __future__ import annotations
 
@@ -19,6 +19,8 @@ import config as app_config
 
 GROQ_EMBEDDINGS_URL = "https://api.groq.com/openai/v1/embeddings"
 _MAX_BATCH = 48
+
+_NOMIC_IDS = ("nomic-embed-text-v1.5", "nomic-embed-text-v1_5")
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
@@ -66,34 +68,42 @@ def _groq_embed_batches(texts: list[str], api_key: str, model: str) -> list[list
     return out
 
 
-def _should_retry_other_nomic_id(err: RuntimeError) -> bool:
+def _groq_model_missing(err: RuntimeError) -> bool:
     s = str(err).lower()
-    return (
-        "model_not_found" in s
-        or "does not exist" in s
-        or "do not have access" in s
-    )
+    return "model_not_found" in s or "does not exist" in s or "do not have access" in s
+
+
+def _groq_nomic_candidates(primary: str) -> list[str]:
+    """Always try v1.5 (dot) first, then v1_5 — order does not depend on primary spelling."""
+    p = (primary or "").strip().lower()
+    if "nomic" in p and "embed" in p:
+        return list(_NOMIC_IDS)
+    if not p:
+        return list(_NOMIC_IDS)
+    return [primary.strip()]
 
 
 def _groq_embed_with_fallback(texts: list[str], api_key: str, primary: str) -> list[list[float]]:
-    """Try primary id; for Nomic v1 embedding ids, retry the alternate spelling once."""
-    candidates = [primary]
-    if primary == "nomic-embed-text-v1.5":
-        candidates.append("nomic-embed-text-v1_5")
-    elif primary == "nomic-embed-text-v1_5":
-        candidates.insert(0, "nomic-embed-text-v1.5")
-
+    candidates = _groq_nomic_candidates(primary)
     last: RuntimeError | None = None
     for i, m in enumerate(candidates):
         try:
             return _groq_embed_batches(texts, api_key, m)
         except RuntimeError as e:
             last = e
-            if i < len(candidates) - 1 and _should_retry_other_nomic_id(e):
+            if i < len(candidates) - 1 and _groq_model_missing(e):
                 continue
             raise
     assert last is not None
     raise last
+
+
+def _try_local_sentence_transformers(texts: list[str]) -> list[list[float]] | None:
+    try:
+        from embedding_local import embed_texts_local
+    except ImportError:
+        return None
+    return embed_texts_local(texts, app_config.EMBED_MODEL)
 
 
 def _resolve_groq_model(rc: dict) -> str:
@@ -121,7 +131,20 @@ def embed_texts(texts: list[str], runtime_config: dict | None = None) -> list[li
                 "(Authorization header on /analyze or GROQ_API_KEY in .env)."
             )
         model = _resolve_groq_model(rc)
-        return _groq_embed_with_fallback(texts, api_key, model)
+        try:
+            return _groq_embed_with_fallback(texts, api_key, model)
+        except RuntimeError as e:
+            if not app_config.EMBEDDING_GROQ_FALLBACK_LOCAL or not _groq_model_missing(e):
+                raise
+            local_vec = _try_local_sentence_transformers(texts)
+            if local_vec is None:
+                raise RuntimeError(
+                    "Groq Cloud rejected all Nomic embedding model ids (embeddings may be disabled "
+                    "for this API key). Install local embeddings: pip install -r requirements-local-embed.txt "
+                    "then set EMBEDDING_PROVIDER=local in .env, or keep EMBEDDING_GROQ_FALLBACK_LOCAL=true "
+                    "after installing those packages."
+                ) from e
+            return local_vec
 
     if provider == "local":
         try:
