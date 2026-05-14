@@ -1,28 +1,90 @@
 """
-Embedding service using sentence-transformers.
-No Ollama/OpenAI embedding API path is used.
+Embeddings: Groq OpenAI-compatible HTTP API by default (no PyTorch on server).
+
+Optional local path: EMBEDDING_PROVIDER=local + sentence-transformers
+(see requirements-local-embed.txt).
 """
-from sentence_transformers import SentenceTransformer
-import numpy as np
+from __future__ import annotations
+
+import math
+import httpx
+
 import config as app_config
 
-_model_cache: dict[str, SentenceTransformer] = {}
-
-
-def _get_model(model_name: str | None = None) -> SentenceTransformer:
-    name = model_name or app_config.EMBED_MODEL
-    if name not in _model_cache:
-        _model_cache[name] = SentenceTransformer(name)
-    return _model_cache[name]
-
-
-def embed_texts(texts: list[str], model_name: str | None = None) -> list[list[float]]:
-    model = _get_model(model_name)
-    embeddings = model.encode(texts, normalize_embeddings=True)
-    return embeddings.tolist()
+GROQ_EMBEDDINGS_URL = "https://api.groq.com/openai/v1/embeddings"
+# Groq may raise limits on batch size; stay conservative.
+_MAX_BATCH = 48
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
-    va, vb = np.array(a), np.array(b)
-    denom = np.linalg.norm(va) * np.linalg.norm(vb)
-    return float(np.dot(va, vb) / denom) if denom else 0.0
+    """Cosine similarity; L2-normalizes inputs defensively (Groq vs ST)."""
+    def _norm(v: list[float]) -> list[float]:
+        m = math.sqrt(sum(x * x for x in v))
+        return [x / m for x in v] if m else v
+
+    na, nb = _norm(a), _norm(b)
+    return float(sum(x * y for x, y in zip(na, nb)))
+
+
+def _groq_embed(texts: list[str], api_key: str, model: str) -> list[list[float]]:
+    if not texts:
+        return []
+    safe = [(t if t.strip() else " ") for t in texts]
+    out: list[list[float]] = []
+    with httpx.Client(timeout=120.0) as client:
+        for i in range(0, len(safe), _MAX_BATCH):
+            chunk = safe[i : i + _MAX_BATCH]
+            resp = client.post(
+                GROQ_EMBEDDINGS_URL,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "input": chunk,
+                    "encoding_format": "float",
+                },
+            )
+            resp.raise_for_status()
+            data = sorted(resp.json()["data"], key=lambda d: d["index"])
+            out.extend([d["embedding"] for d in data])
+    return out
+
+
+def _resolve_groq_model(rc: dict) -> str:
+    m = rc.get("embedding_model") or app_config.GROQ_EMBED_MODEL
+    if not m or "MiniLM" in m or m.startswith("sentence-"):
+        return app_config.GROQ_EMBED_MODEL
+    return m
+
+
+def embed_texts(texts: list[str], runtime_config: dict | None = None) -> list[list[float]]:
+    """
+    Batch-embed texts. Provider from runtime_config or EMBEDDING_PROVIDER env.
+    Groq path requires api_key in runtime_config or GROQ_API_KEY in env.
+    """
+    rc = runtime_config or {}
+    provider = (rc.get("embedding_provider") or app_config.EMBEDDING_PROVIDER).lower().strip()
+    api_key = rc.get("api_key") or app_config.GROQ_API_KEY
+
+    if provider == "groq":
+        if not api_key:
+            raise ValueError(
+                "Groq API key required for embedding_provider=groq "
+                "(Authorization header on /analyze or GROQ_API_KEY in .env)."
+            )
+        model = _resolve_groq_model(rc)
+        return _groq_embed(texts, api_key, model)
+
+    if provider == "local":
+        try:
+            from embedding_local import embed_texts_local
+        except ImportError as e:
+            raise ImportError(
+                "Local embeddings need sentence-transformers. "
+                "pip install -r requirements-local-embed.txt"
+            ) from e
+        return embed_texts_local(texts, rc.get("embedding_model") or app_config.EMBED_MODEL)
+
+    raise ValueError(f"Unknown EMBEDDING_PROVIDER: {provider!r} (use groq or local)")

@@ -1,5 +1,5 @@
 """
-Deviation analysis: uses sentence-transformers embeddings.
+Deviation analysis: embedding-based alignment (Groq API or optional local ST).
 Produces a rich structured payload consumed by the Master Prompt.
 """
 from groq_client import get_groq_client, get_groq_model
@@ -29,36 +29,41 @@ def analyze_conversation(chat: dict, runtime_config: dict | None = None) -> dict
     by the master prompt payload.
     """
     messages = chat.get("conversation", [])
-    turns = []
-    sentence_alignment: list[float] = []
-    i = 0
+    pairs: list[tuple[str, str]] = []
 
+    i = 0
     while i < len(messages) - 1:
         if messages[i]["role"] == "user" and messages[i + 1]["role"] in {"assistant", "model"}:
-            user_text = messages[i]["content"]
-            asst_text = messages[i + 1]["content"]
+            u = messages[i]["content"] or " "
+            a = messages[i + 1]["content"] or " "
+            pairs.append((u, a))
+        i += 1
 
-            vecs = embed_texts(
-                [user_text, asst_text],
-                model_name=(runtime_config or {}).get("embedding_model"),
-            )
-            score = cosine_similarity(vecs[0], vecs[1])
-            kw    = _keyword_overlap(user_text, asst_text)
+    turns: list[dict] = []
+    sentence_alignment: list[float] = []
 
+    if pairs:
+        flat: list[str] = []
+        for u, a in pairs:
+            flat.extend([u, a])
+        all_vecs = embed_texts(flat, runtime_config)
+        for k, (user_text, asst_text) in enumerate(pairs):
+            vu, va = all_vecs[2 * k], all_vecs[2 * k + 1]
+            score = cosine_similarity(vu, va)
+            kw = _keyword_overlap(user_text, asst_text)
             turns.append({
-                "turn":               i // 2 + 1,
+                "turn":               k + 1,
                 "semantic_alignment": round(score, 4),
                 "keyword_overlap":    kw,
                 "deviation":          round(1.0 - score, 4),
             })
             sentence_alignment.append(round(score, 4))
-        i += 1
 
     avg_alignment = sum(t["semantic_alignment"] for t in turns) / len(turns) if turns else 0.0
-    avg_kw        = sum(t["keyword_overlap"]    for t in turns) / len(turns) if turns else 0.0
+    avg_kw = sum(t["keyword_overlap"] for t in turns) / len(turns) if turns else 0.0
 
     # Drift: first sentence where alignment drops > 0.15 below average
-    drift_point = "none"
+    drift_point: str | int = "none"
     for idx, score in enumerate(sentence_alignment):
         if avg_alignment - score > 0.15:
             drift_point = idx
