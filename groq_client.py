@@ -8,7 +8,7 @@ import config as app_config
 
 def get_groq_client(runtime_config: dict | None = None) -> Groq:
     rc = runtime_config or {}
-    api_key = rc.get("api_key") or app_config.GROQ_API_KEY
+    api_key = (rc.get("api_key") or app_config.GROQ_API_KEY or "").strip()
     if not api_key:
         raise ValueError("Groq API key not set. Enter it in the extension or set GROQ_API_KEY in .env.")
     return Groq(api_key=api_key)

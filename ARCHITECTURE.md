@@ -23,7 +23,7 @@ The user supplies a **Groq API key** (stored in the browser; also sent to the ba
 | `models.py` | Pydantic `ChatRequest`, `Message`, `IntegratedResponse`; `get_runtime_config()` for Groq/model/domain/language |
 | `config.py` | Loads `.env`: `GROQ_API_KEY`, `GROQ_MODEL`, `DOMAIN`, `SUPPORTED_LANGUAGES`, `EMBED_MODEL` |
 | `groq_client.py` | Factory: `get_groq_client`, `get_groq_model`, `get_domain` (request overrides `.env`) |
-| `embedding_service.py` | Default **Groq HTTP embeddings** (`nomic-embed-text-v1.5`); optional **local** path via `embedding_local.py` + `sentence-transformers` |
+| `embedding_service.py` | Default **Groq HTTP embeddings** (`nomic-embed-text-v1_5`); optional **local** path via `embedding_local.py` + `sentence-transformers` |
 | `embedding_local.py` | Optional SentenceTransformers path when `EMBEDDING_PROVIDER=local` |
 | `deviation_service.py` | `analyze_conversation` (embedding metrics, drift heuristics) + `extract_keyword_constraint_analysis` (Groq JSON extraction) |
 | `reconstruction_service.py` | `MASTER_PROMPT`, `DOMAIN_PERSONAS`, `generate_master_report` (second Groq call) |
@@ -140,7 +140,7 @@ On exception: yields `{ "error": "<message>" }`.
 
 ### 5.2 Embedding path (`embedding_service.py`)
 
-- **Default (`EMBEDDING_PROVIDER=groq`):** `POST https://api.groq.com/openai/v1/embeddings` with model `nomic-embed-text-v1.5` (or `GROQ_EMBED_MODEL`), batched (chunk size capped in code). Requires Groq API key (from request or env).  
+- **Default (`EMBEDDING_PROVIDER=groq`):** `POST https://api.groq.com/openai/v1/embeddings` with model **`nomic-embed-text-v1_5`** (underscore; Groq rejects `v1.5` with a dot), batched (chunk size capped in code). Requires Groq API key (from request or env).  
 - **Local (`EMBEDDING_PROVIDER=local`):** `embedding_local.embed_texts_local` using SentenceTransformers (`EMBED_MODEL`, default `all-MiniLM-L6-v2`); install optional deps from `requirements-local-embed.txt`.  
 - **`cosine_similarity`:** pure-Python L2-normalized dot product (works for Groq and ST vectors).
 
@@ -191,7 +191,7 @@ Returns: `conversation_metrics`, `sentence_alignment`, `drift_analysis`, `aggreg
 | `DOMAIN` | Default domain |
 | `DEFAULT_LANGUAGE` | Default language code |
 | `EMBEDDING_PROVIDER` | `groq` (default) or `local` |
-| `GROQ_EMBED_MODEL` | Groq embedding model id (default `nomic-embed-text-v1.5`) |
+| `GROQ_EMBED_MODEL` | Groq embedding model id (default **`nomic-embed-text-v1_5`**, not `v1.5`) |
 | `EMBED_MODEL` | Local SentenceTransformer name when `EMBEDDING_PROVIDER=local` |
 
 `.env` is gitignored; use `.env.example` as a template.

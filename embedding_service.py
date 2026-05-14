@@ -29,6 +29,7 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
 def _groq_embed(texts: list[str], api_key: str, model: str) -> list[list[float]]:
     if not texts:
         return []
+    api_key = api_key.strip()
     safe = [(t if t.strip() else " ") for t in texts]
     out: list[list[float]] = []
     with httpx.Client(timeout=120.0) as client:
@@ -46,16 +47,26 @@ def _groq_embed(texts: list[str], api_key: str, model: str) -> list[list[float]]
                     "encoding_format": "float",
                 },
             )
-            resp.raise_for_status()
+            if resp.status_code >= 400:
+                try:
+                    detail = resp.json()
+                except Exception:
+                    detail = resp.text
+                raise RuntimeError(
+                    f"Groq embeddings HTTP {resp.status_code} (model={model!r}): {detail}"
+                ) from None
             data = sorted(resp.json()["data"], key=lambda d: d["index"])
             out.extend([d["embedding"] for d in data])
     return out
 
 
 def _resolve_groq_model(rc: dict) -> str:
-    m = rc.get("embedding_model") or app_config.GROQ_EMBED_MODEL
+    m = (rc.get("embedding_model") or app_config.GROQ_EMBED_MODEL or "").strip()
     if not m or "MiniLM" in m or m.startswith("sentence-"):
-        return app_config.GROQ_EMBED_MODEL
+        m = app_config.GROQ_EMBED_MODEL
+    # Groq OpenAPI literal is nomic-embed-text-v1_5 (underscore). Accept common typo.
+    if m == "nomic-embed-text-v1.5" or m == "nomic-embed-text-v1-5":
+        m = "nomic-embed-text-v1_5"
     return m
 
 

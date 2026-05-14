@@ -26,5 +26,9 @@ DEFAULT_LANGUAGE = os.getenv("DEFAULT_LANGUAGE", "en")
 # local = sentence-transformers (see requirements-local-embed.txt)
 # ==============================
 EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "groq").strip().lower()
-GROQ_EMBED_MODEL = os.getenv("GROQ_EMBED_MODEL", "nomic-embed-text-v1.5")
+_raw_embed = os.getenv("GROQ_EMBED_MODEL", "nomic-embed-text-v1_5").strip()
+# Groq OpenAPI id uses underscore (v1_5); "v1.5" in env or docs causes HTTP 400 schema errors.
+if _raw_embed.startswith("nomic-embed-text-v1") and "v1_5" not in _raw_embed:
+    _raw_embed = "nomic-embed-text-v1_5"
+GROQ_EMBED_MODEL = _raw_embed
 EMBED_MODEL = os.getenv("EMBED_MODEL", "all-MiniLM-L6-v2")
