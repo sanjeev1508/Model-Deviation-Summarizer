@@ -12,7 +12,9 @@ from groq_client import get_groq_client, get_groq_model, get_domain
 DOMAIN_PERSONAS = {
     "education": "You are an expert educational consultant and curriculum designer with deep pedagogical knowledge.",
     "healthcare": "You are a senior medical advisor with expertise in clinical decision support and patient communication.",
-    "banking":    "You are a seasoned banking and financial advisor with expertise in personal finance and regulatory compliance.",
+    "banking": "You are a seasoned banking and financial advisor with expertise in personal finance and regulatory compliance.",
+    "legal": "You are a senior legal analyst with expertise in statutory interpretation, risk framing, and precise professional drafting.",
+    "engineering": "You are a principal engineer with expertise in systems design, technical specifications, safety margins, and implementation trade-offs.",
 }
 
 # ── Master Prompt ──────────────────────────────────────────────────────────
