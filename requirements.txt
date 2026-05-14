@@ -6,4 +6,3 @@ groq
 nltk
 langdetect
 httpx
-sentence-transformers

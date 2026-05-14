@@ -1,0 +1,4 @@
+# Optional: only if EMBEDDING_PROVIDER=local (offline / air-gapped dev).
+# Install after requirements.txt:
+#   pip install -r requirements-local-embed.txt
+sentence-transformers
