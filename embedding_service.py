@@ -3,16 +3,21 @@ Embeddings: Groq OpenAI-compatible HTTP API by default (no PyTorch on server).
 
 Optional local path: EMBEDDING_PROVIDER=local + sentence-transformers
 (see requirements-local-embed.txt).
+
+Canonical Groq embedding id in official Python examples: ``nomic-embed-text-v1.5``
+(dot). If Groq returns model_not_found for one spelling, we retry the other
+(``nomic-embed-text-v1_5``) once.
 """
 from __future__ import annotations
 
 import math
+from typing import Any
+
 import httpx
 
 import config as app_config
 
 GROQ_EMBEDDINGS_URL = "https://api.groq.com/openai/v1/embeddings"
-# Groq may raise limits on batch size; stay conservative.
 _MAX_BATCH = 48
 
 
@@ -26,7 +31,7 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     return float(sum(x * y for x, y in zip(na, nb)))
 
 
-def _groq_embed(texts: list[str], api_key: str, model: str) -> list[list[float]]:
+def _groq_embed_batches(texts: list[str], api_key: str, model: str) -> list[list[float]]:
     if not texts:
         return []
     api_key = api_key.strip()
@@ -47,26 +52,56 @@ def _groq_embed(texts: list[str], api_key: str, model: str) -> list[list[float]]
                     "encoding_format": "float",
                 },
             )
+            detail: Any
+            try:
+                detail = resp.json()
+            except Exception:
+                detail = resp.text
             if resp.status_code >= 400:
-                try:
-                    detail = resp.json()
-                except Exception:
-                    detail = resp.text
                 raise RuntimeError(
                     f"Groq embeddings HTTP {resp.status_code} (model={model!r}): {detail}"
                 ) from None
-            data = sorted(resp.json()["data"], key=lambda d: d["index"])
+            data = sorted(detail["data"], key=lambda d: d["index"])
             out.extend([d["embedding"] for d in data])
     return out
+
+
+def _should_retry_other_nomic_id(err: RuntimeError) -> bool:
+    s = str(err).lower()
+    return (
+        "model_not_found" in s
+        or "does not exist" in s
+        or "do not have access" in s
+    )
+
+
+def _groq_embed_with_fallback(texts: list[str], api_key: str, primary: str) -> list[list[float]]:
+    """Try primary id; for Nomic v1 embedding ids, retry the alternate spelling once."""
+    candidates = [primary]
+    if primary == "nomic-embed-text-v1.5":
+        candidates.append("nomic-embed-text-v1_5")
+    elif primary == "nomic-embed-text-v1_5":
+        candidates.insert(0, "nomic-embed-text-v1.5")
+
+    last: RuntimeError | None = None
+    for i, m in enumerate(candidates):
+        try:
+            return _groq_embed_batches(texts, api_key, m)
+        except RuntimeError as e:
+            last = e
+            if i < len(candidates) - 1 and _should_retry_other_nomic_id(e):
+                continue
+            raise
+    assert last is not None
+    raise last
 
 
 def _resolve_groq_model(rc: dict) -> str:
     m = (rc.get("embedding_model") or app_config.GROQ_EMBED_MODEL or "").strip()
     if not m or "MiniLM" in m or m.startswith("sentence-"):
         m = app_config.GROQ_EMBED_MODEL
-    # Groq OpenAPI literal is nomic-embed-text-v1_5 (underscore). Accept common typo.
-    if m == "nomic-embed-text-v1.5" or m == "nomic-embed-text-v1-5":
-        m = "nomic-embed-text-v1_5"
+    if m in ("nomic-embed-text-v1_5", "nomic-embed-text-v1-5"):
+        m = "nomic-embed-text-v1.5"
     return m
 
 
@@ -86,7 +121,7 @@ def embed_texts(texts: list[str], runtime_config: dict | None = None) -> list[li
                 "(Authorization header on /analyze or GROQ_API_KEY in .env)."
             )
         model = _resolve_groq_model(rc)
-        return _groq_embed(texts, api_key, model)
+        return _groq_embed_with_fallback(texts, api_key, model)
 
     if provider == "local":
         try:

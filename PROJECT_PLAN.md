@@ -7,7 +7,7 @@ This plan responds to a product/engineering review: **security (API keys)**, **r
 - **Legal & engineering personas** added to `DOMAIN_PERSONAS` in `reconstruction_service.py` (no more silent fallback to education tone).
 - **Appwrite entrypoint** (`main_appwrite.py`) rewritten to use the **same pipeline** as FastAPI `/analyze` (`analyze_conversation` → `extract_keyword_constraint_analysis` → `build_master_payload` → `generate_master_report`), with `api_key` / `model` passed through `runtime_config`.
 - **Shared payload assembly** in `pipeline_core.py` so FastAPI and Appwrite cannot drift silently.
-- **Default embeddings via Groq** (`nomic-embed-text-v1_5` HTTP API): no PyTorch on the server by default; optional `EMBEDDING_PROVIDER=local` + `requirements-local-embed.txt` for offline dev.
+- **Default embeddings via Groq** (`nomic-embed-text-v1.5` HTTP API): no PyTorch on the server by default; optional `EMBEDDING_PROVIDER=local` + `requirements-local-embed.txt` for offline dev.
 - **Tighter CORS** (`chrome-extension://…`, localhost, Render host) instead of `*`.
 - **Extension sends Groq key in `Authorization: Bearer`** for `/analyze` and `/test-groq` (not in JSON body); FastAPI merges into `ChatRequest.api_key` for downstream Groq SDK calls.
 
