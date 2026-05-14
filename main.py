@@ -1,4 +1,6 @@
-from fastapi import FastAPI
+from typing import Annotated
+
+from fastapi import FastAPI, Header
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import json
@@ -10,6 +12,7 @@ from models import ChatRequest
 from deviation_service import analyze_conversation, extract_keyword_constraint_analysis
 from summary_service import build_conversation_text, detect_language, LANGUAGE_NAMES
 from reconstruction_service import generate_master_report, DOMAIN_PERSONAS
+from pipeline_core import build_master_payload
 from groq_client import get_groq_client, get_groq_model
 import config as app_config
 
@@ -22,8 +25,13 @@ app = FastAPI(title="Conversation Alignment Engine")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Safe for extension usage
-    allow_credentials=True,
+    allow_origin_regex=(
+        r"^chrome-extension://[\w-]+$|"
+        r"^https://model-deviation-summarizer\.onrender\.com$|"
+        r"^http://127\.0\.0\.1(?::\d+)?$|"
+        r"^http://localhost(?::\d+)?$"
+    ),
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -43,11 +51,13 @@ def health_check():
 @app.get("/config")
 def get_config():
     return {
-        "groq_model":         app_config.GROQ_MODEL,
-        "embed_model":        app_config.EMBED_MODEL,
-        "domain":             app_config.DOMAIN,
+        "groq_model":          app_config.GROQ_MODEL,
+        "embedding_provider": app_config.EMBEDDING_PROVIDER,
+        "groq_embed_model":   app_config.GROQ_EMBED_MODEL,
+        "embed_model_local":  app_config.EMBED_MODEL,
+        "domain":              app_config.DOMAIN,
         "supported_languages": app_config.SUPPORTED_LANGUAGES,
-        "api_source":         "Groq API",
+        "api_source":          "Groq API",
     }
 
 # =====================================================
@@ -55,10 +65,17 @@ def get_config():
 # =====================================================
 
 @app.post("/analyze")
-async def analyze(chat: ChatRequest):
+async def analyze(
+    chat: ChatRequest,
+    authorization: Annotated[str | None, Header()] = None,
+):
+    if authorization and authorization.startswith("Bearer "):
+        tok = authorization[7:].strip()
+        if tok:
+            chat = chat.model_copy(update={"api_key": tok})
     return StreamingResponse(
         analyze_stream(chat),
-        media_type="application/x-ndjson"
+        media_type="application/x-ndjson",
     )
 
 
@@ -89,23 +106,7 @@ async def analyze_stream(chat: ChatRequest):
         # ── Step 3: Build structured payload for the MASTER_PROMPT ─────────
         yield json.dumps({"status": "Building structured deviation payload..."}) + "\n"
 
-        metrics = features.get("conversation_metrics", {})
-        agg     = features.get("aggregate", {})
-
-        master_payload = {
-            "original_query":      kc_data.get("original_query", ""),
-            "model_response":      kc_data.get("model_response", ""),
-            "metrics": {
-                "semantic_similarity": agg.get("semantic_similarity", 0.0),
-                "intent_alignment":    kc_data.get("intent_alignment", 0.0),
-                "keyword_overlap":     agg.get("keyword_overlap", 0.0),
-                "constraint_score":    kc_data.get("constraint_score", 0.0),
-            },
-            "drift_analysis":      features.get("drift_analysis", {}),
-            "keyword_analysis":    kc_data.get("keyword_analysis", {}),
-            "constraint_analysis": kc_data.get("constraint_analysis", {}),
-            "sentence_alignment":  features.get("sentence_alignment", []),
-        }
+        master_payload = build_master_payload(features, kc_data)
 
         # ── Step 4: MASTER_PROMPT → final diagnostic report ────────────────
         yield json.dumps({"status": "Generating Master Diagnostic Report..."}) + "\n"
@@ -132,9 +133,19 @@ class GroqTestRequest(PydanticBase):
 
 
 @app.post("/test-groq")
-def test_groq(req: GroqTestRequest):
+def test_groq(
+    req: GroqTestRequest,
+    authorization: Annotated[str | None, Header()] = None,
+):
+    key: str | None = None
+    if authorization and authorization.startswith("Bearer "):
+        key = authorization[7:].strip()
+    if not key:
+        key = req.api_key
+    if not key:
+        return {"ok": False, "error": "Missing API key (use Authorization: Bearer or JSON api_key)."}
     try:
-        runtime_config = {"api_key": req.api_key} if req.api_key else {}
+        runtime_config = {"api_key": key}
         client = get_groq_client(runtime_config)
         model  = get_groq_model(runtime_config)
         resp   = client.chat.completions.create(
